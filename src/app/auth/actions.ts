@@ -1,0 +1,37 @@
+"use server";
+
+import { prisma } from "@/lib/prisma";
+import bcrypt from "bcryptjs";
+import { z } from "zod";
+
+const signupSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(6),
+  name: z.string().optional(),
+  role: z.enum(["TENANT", "OWNER"]),
+});
+
+export async function signUpAction(fd: FormData) {
+  const raw = {
+    email: String(fd.get("email") ?? "").trim().toLowerCase(),
+    password: String(fd.get("password") ?? ""),
+    name: String(fd.get("name") ?? "").trim() || undefined,
+    role: String(fd.get("role") ?? "TENANT") as "TENANT" | "OWNER",
+  };
+
+  const parsed = signupSchema.safeParse(raw);
+  if (!parsed.success) return { ok: false, error: "Dados inválidos." };
+
+  const { email, password, name, role } = parsed.data;
+
+  const exists = await prisma.user.findUnique({ where: { email } });
+  if (exists) return { ok: false, error: "E-mail já cadastrado." };
+
+  const passwordHash = await bcrypt.hash(password, 10);
+  await prisma.user.create({
+    data: { email, name, passwordHash, role },
+  });
+
+  // after signup redirect to sign-in (role preserved)
+  return { ok: true, redirectTo: `/auth/sign-in?role=${role}` };
+}
