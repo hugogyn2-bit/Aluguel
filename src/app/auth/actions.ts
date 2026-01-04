@@ -26,7 +26,6 @@ export async function signUpAction(fd: FormData) {
   if (exists) return { ok: false, error: "E-mail já cadastrado." };
 
   const passwordHash = await bcrypt.hash(password, 10);
-
   const trialEndsAt = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
 
   await prisma.user.create({
