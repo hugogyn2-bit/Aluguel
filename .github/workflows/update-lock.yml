@@ -1,4 +1,4 @@
-name: Update lockfile (npm install)
+name: Update lockfile (npm)
 
 on:
   workflow_dispatch:
@@ -12,15 +12,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: true
 
       - name: Setup Node
-  uses: actions/setup-node@v4
-  with:
-    node-version: 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
 
-      - name: Install deps (generate package-lock.json)
-  run: npm install --package-lock-only
-
+      - name: Generate package-lock.json
+        run: npm install --package-lock-only
 
       - name: Commit changes (if any)
         run: |
@@ -28,5 +29,5 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add package-lock.json package.json || true
           git diff --cached --quiet && echo "No changes to commit" && exit 0
-          git commit -m "chore: update lockfile after next upgrade"
+          git commit -m "chore: generate package-lock.json"
           git push
