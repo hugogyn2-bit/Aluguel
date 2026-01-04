@@ -2,50 +2,61 @@
 
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 export function SignInForm() {
   const router = useRouter();
   const sp = useSearchParams();
-  const role = (sp.get("role") === "OWNER" ? "OWNER" : "TENANT") as "OWNER" | "TENANT";
+
+  const role = useMemo(() => {
+    return (sp.get("role") === "OWNER" ? "OWNER" : "TENANT") as "OWNER" | "TENANT";
+  }, [sp]);
 
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (loading) return;
+
     setLoading(true);
     setErr(null);
 
-    const fd = new FormData(e.currentTarget);
-    const email = String(fd.get("email") ?? "");
-    const password = String(fd.get("password") ?? "");
+    try {
+      const fd = new FormData(e.currentTarget);
+      const email = String(fd.get("email") ?? "").trim().toLowerCase();
+      const password = String(fd.get("password") ?? "");
 
-    const res = await signIn("credentials", {
-      redirect: false,
-      email,
-      password,
-      role,
-    });
+      if (!email || !password) {
+        setErr("Preencha e-mail e senha.");
+        return;
+      }
 
-    setLoading(false);
+      const res = await signIn("credentials", {
+        redirect: false,
+        email,
+        password,
+        role,
+      });
 
-    if (!res?.ok) {
-      setErr("E-mail ou senha inválidos.");
-      return;
+      if (!res?.ok) {
+        // NextAuth com Credentials geralmente não retorna detalhes
+        setErr("E-mail ou senha inválidos (ou role errado).");
+        return;
+      }
+
+      // ✅ deixa o middleware decidir (trial/pago/paywall)
+      // OWNER: tenta /owner (vai pro /paywall se não pago e sem trial)
+      // TENANT: vai pro /tenant
+      router.replace(role === "OWNER" ? "/owner" : "/tenant");
+      router.refresh();
+    } catch (e: any) {
+      setErr(e?.message || "Erro inesperado ao entrar.");
+    } finally {
+      setLoading(false);
     }
-
-    router.push(role === "OWNER" ? "/owner" : "/tenant");
   }
 
   return (
     <form onSubmit={onSubmit} style={{ display: "grid", gap: 12, marginTop: 16 }}>
-      <input name="email" type="email" placeholder="Email" required />
-      <input name="password" type="password" placeholder="Senha" required />
-      <button type="submit" disabled={loading}>
-        {loading ? "Entrando..." : "Entrar"}
-      </button>
-      {err ? <p style={{ color: "crimson" }}>{err}</p> : null}
-    </form>
-  );
-}
+      <input name="email" type="email"
