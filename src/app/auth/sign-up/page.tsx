@@ -1,47 +1,10 @@
-import { signUpAction } from "../actions";
-import { redirect } from "next/navigation";
+import { Suspense } from "react";
+import SignInClient from "./SignInClient";
 
-export default async function Page({
-  searchParams,
-}: {
-  searchParams: Promise<{ role?: string; error?: string }>;
-}) {
-  const sp = await searchParams;
-  const role = sp?.role === "OWNER" ? "OWNER" : "TENANT";
-  const error = sp?.error ? decodeURIComponent(sp.error) : "";
-
-  async function action(fd: FormData): Promise<void> {
-    "use server";
-    fd.set("role", role);
-
-    const res = await signUpAction(fd);
-
-    if (res?.ok && res?.redirectTo) {
-      redirect(res.redirectTo);
-    }
-
-    // Se deu erro, volta pra mesma tela com a msg
-    const msg = encodeURIComponent(res?.error ?? "Falha ao cadastrar.");
-    redirect(`/auth/sign-up?role=${role}&error=${msg}`);
-  }
-
+export default function Page() {
   return (
-    <main style={{ maxWidth: 420, margin: "40px auto", padding: 16 }}>
-      <h1 style={{ fontSize: 24, fontWeight: 700 }}>Criar conta</h1>
-      <p style={{ opacity: 0.7, marginTop: 8 }}>Cadastre-se para continuar.</p>
-
-      {error ? <p style={{ marginTop: 12, color: "crimson" }}>{error}</p> : null}
-
-      <form action={action} style={{ display: "grid", gap: 12, marginTop: 16 }}>
-        <input name="name" placeholder="Nome (opcional)" />
-        <input name="email" type="email" placeholder="Email" required />
-        <input name="password" type="password" placeholder="Senha" minLength={6} required />
-        <button type="submit">Criar conta</button>
-      </form>
-
-      <p style={{ marginTop: 16, fontSize: 14, opacity: 0.7 }}>
-        Já tem conta? <a href={`/auth/sign-in?role=${role}`}>Entrar</a>
-      </p>
-    </main>
+    <Suspense fallback={<div style={{ padding: 24 }}>Carregando...</div>}>
+      <SignInClient />
+    </Suspense>
   );
 }
