@@ -1,3 +1,5 @@
+"use client";
+
 export function AuthShell({
   title,
   subtitle,
@@ -8,10 +10,10 @@ export function AuthShell({
   children: React.ReactNode;
 }) {
   return (
-    <main>
+    <div>
       <h1>{title}</h1>
       <p>{subtitle}</p>
       {children}
-    </main>
+    </div>
   );
 }
