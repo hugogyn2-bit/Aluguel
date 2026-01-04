@@ -27,10 +27,8 @@ const handler = NextAuth({
         const ok = await bcrypt.compare(password, user.passwordHash);
         if (!ok) return null;
 
-        // se quiser bloquear role diferente no login:
         if (user.role !== role) return null;
 
-        // o NextAuth precisa de um "user" simples
         return {
           id: user.id,
           email: user.email,
@@ -44,7 +42,6 @@ const handler = NextAuth({
 
   callbacks: {
     async jwt({ token, user }) {
-      // na 1ª vez (login), o "user" vem do authorize
       if (user) {
         token.id = (user as any).id;
         token.role = (user as any).role;
@@ -60,10 +57,7 @@ const handler = NextAuth({
     },
   },
 
-  pages: {
-    signIn: "/auth/sign-in",
-  },
-
+  pages: { signIn: "/auth/sign-in" },
   secret: process.env.NEXTAUTH_SECRET,
 });
 
