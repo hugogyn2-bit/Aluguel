@@ -2,62 +2,32 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 
+type Role = "TENANT" | "OWNER";
+
+function normalizeRole(v: string | null): Role {
+  return v?.toUpperCase() === "OWNER" ? "OWNER" : "TENANT";
+}
+
 export async function middleware(req: NextRequest) {
   const { pathname, searchParams } = req.nextUrl;
 
   // ✅ Compat: rotas antigas
   if (pathname === "/login") {
-    const role = (searchParams.get("role") || "TENANT").toUpperCase();
-    const r = role === "OWNER" ? "OWNER" : "TENANT";
+    const r = normalizeRole(searchParams.get("role"));
     return NextResponse.redirect(new URL(`/auth/sign-in?role=${r}`, req.url));
   }
 
   if (pathname === "/register") {
-    const role = (searchParams.get("role") || "TENANT").toUpperCase();
-    const r = role === "OWNER" ? "OWNER" : "TENANT";
+    const r = normalizeRole(searchParams.get("role"));
     return NextResponse.redirect(new URL(`/auth/sign-up?role=${r}`, req.url));
   }
 
-  // ✅ Lê sessão/token
+  // ✅ Lê sessão/token (JWT)
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
 
   const isAuth = !!token;
-  const role = token?.role as "TENANT" | "OWNER" | undefined;
-  const ownerPaid = !!token?.ownerPaid;
-
-  // ✅ Protect tenant
-  if (pathname.startsWith("/tenant")) {
-    if (!isAuth) {
-      return NextResponse.redirect(new URL(`/auth/sign-in?role=TENANT`, req.url));
-    }
-  }
-
-  // ✅ Protect owner
-if (pathname.startsWith("/owner")) {
-  if (!isAuth) {
-    return NextResponse.redirect(new URL(`/auth/sign-in?role=OWNER`, req.url));
-  }
-  if (role !== "OWNER") {
-    return NextResponse.redirect(new URL(`/tenant`, req.url));
-  }
-
-  const trialEndsAt = token?.trialEndsAt ? new Date(token.trialEndsAt as any) : null;
-  const inTrial = trialEndsAt ? Date.now() < trialEndsAt.getTime() : false;
-
-  if (!ownerPaid && !inTrial) {
-    return NextResponse.redirect(new URL(`/paywall`, req.url));
-  }
-}
-
-  // ✅ Paywall requires owner session
-  if (pathname.startsWith("/paywall")) {
-    if (!isAuth) {
-      return NextResponse.redirect(new URL(`/auth/sign-in?role=OWNER`, req.url));
-    }
-    if (role !== "OWNER") {
-      return NextResponse.redirect(new URL(`/tenant`, req.url));
-    }
-  }
+  const role = (token?.role as Role | undefined) ?? undefined;
+  const ownerPaid = Boolean((token as any)?.ownerPaid);
 
   // ✅ Auth pages: garante role param (UX)
   if (pathname === "/auth/sign-in" || pathname === "/auth/sign-up") {
@@ -67,6 +37,36 @@ if (pathname.startsWith("/owner")) {
       u.searchParams.set("role", "TENANT");
       return NextResponse.redirect(u);
     }
+  }
+
+  // ✅ Protect tenant
+  if (pathname.startsWith("/tenant")) {
+    if (!isAuth) return NextResponse.redirect(new URL(`/auth/sign-in?role=TENANT`, req.url));
+  }
+
+  // ✅ Protect owner + trial/paywall
+  if (pathname.startsWith("/owner")) {
+    if (!isAuth) return NextResponse.redirect(new URL(`/auth/sign-in?role=OWNER`, req.url));
+    if (role !== "OWNER") return NextResponse.redirect(new URL(`/tenant`, req.url));
+
+    // trialEndsAt vem do token como string ISO (ou null)
+    const rawTrial = (token as any)?.trialEndsAt as string | null | undefined;
+
+    const trialEndsAt = rawTrial ? new Date(rawTrial) : null;
+    const inTrial =
+      trialEndsAt && !Number.isNaN(trialEndsAt.getTime())
+        ? Date.now() < trialEndsAt.getTime()
+        : false;
+
+    if (!ownerPaid && !inTrial) {
+      return NextResponse.redirect(new URL(`/paywall`, req.url));
+    }
+  }
+
+  // ✅ Paywall requires owner session
+  if (pathname.startsWith("/paywall")) {
+    if (!isAuth) return NextResponse.redirect(new URL(`/auth/sign-in?role=OWNER`, req.url));
+    if (role !== "OWNER") return NextResponse.redirect(new URL(`/tenant`, req.url));
   }
 
   return NextResponse.next();
