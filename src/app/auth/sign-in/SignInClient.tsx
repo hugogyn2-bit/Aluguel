@@ -41,6 +41,7 @@ export default function SignInClient() {
   return (
     <main style={{ maxWidth: 420, margin: "40px auto", padding: 16 }}>
       <h1 style={{ fontSize: 24, fontWeight: 700 }}>Entrar</h1>
+      <p style={{ opacity: 0.7, marginTop: 8 }}>Acesse sua conta para continuar.</p>
 
       <form onSubmit={onSubmit} style={{ display: "grid", gap: 12, marginTop: 16 }}>
         <input name="email" type="email" placeholder="Email" required />
@@ -53,8 +54,7 @@ export default function SignInClient() {
       {error && <p style={{ color: "crimson", marginTop: 12 }}>{error}</p>}
 
       <p style={{ marginTop: 16, fontSize: 14, opacity: 0.7 }}>
-        Não tem conta?{" "}
-        <a href={`/auth/sign-up?role=${role}`}>Criar conta</a>
+        Não tem conta? <a href={`/auth/sign-up?role=${role}`}>Criar conta</a>
       </p>
     </main>
   );
