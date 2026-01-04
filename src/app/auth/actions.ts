@@ -16,11 +16,11 @@ export async function signUpAction(fd: FormData) {
 
   const passwordHash = await bcrypt.hash(password, 10);
 
-  // 🔥 trial de 3 dias APENAS para OWNER
+  // trial de 3 dias APENAS para OWNER
   const trialEndsAt =
     role === "OWNER"
       ? new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
-      : null;
+      : undefined;
 
   await prisma.user.create({
     data: {
