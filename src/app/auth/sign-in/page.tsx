@@ -1,26 +1,41 @@
-import { signInAction } from "../actions";
-import { redirect } from "next/navigation";
+"use client";
 
-export default async function Page({
-  searchParams,
-}: {
-  searchParams: Promise<{ role?: string }>;
-}) {
-  const sp = await searchParams;
-  const role = sp?.role === "OWNER" ? "OWNER" : "TENANT";
+import { useSearchParams, useRouter } from "next/navigation";
+import { signIn } from "next-auth/react";
+import { useState } from "react";
 
-  async function action(fd: FormData): Promise<void> {
-    "use server";
-    fd.set("role", role);
+export default function Page() {
+  const sp = useSearchParams();
+  const router = useRouter();
 
-    const res = await signInAction(fd);
+  const role = sp.get("role") === "OWNER" ? "OWNER" : "TENANT";
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-    if (res?.ok && res?.redirectTo) {
-      redirect(res.redirectTo);
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+
+    const fd = new FormData(e.currentTarget);
+    const email = String(fd.get("email") ?? "").trim().toLowerCase();
+    const password = String(fd.get("password") ?? "");
+
+    const res = await signIn("credentials", {
+      redirect: false,
+      email,
+      password,
+      role,
+    });
+
+    setLoading(false);
+
+    if (!res || res.error) {
+      setError("E-mail, senha ou tipo de conta inválidos.");
+      return;
     }
 
-    // se falhar, NÃO retorna objeto (pra não dar problema de typing)
-    // apenas deixa a página recarregar (ou depois a gente mostra mensagem)
+    router.push(role === "OWNER" ? "/owner" : "/tenant");
   }
 
   return (
@@ -28,11 +43,15 @@ export default async function Page({
       <h1 style={{ fontSize: 24, fontWeight: 700 }}>Entrar</h1>
       <p style={{ opacity: 0.7, marginTop: 8 }}>Acesse sua conta para continuar.</p>
 
-      <form action={action} style={{ display: "grid", gap: 12, marginTop: 16 }}>
+      <form onSubmit={onSubmit} style={{ display: "grid", gap: 12, marginTop: 16 }}>
         <input name="email" type="email" placeholder="Email" required />
         <input name="password" type="password" placeholder="Senha" required />
-        <button type="submit">Entrar</button>
+        <button type="submit" disabled={loading}>
+          {loading ? "Entrando..." : "Entrar"}
+        </button>
       </form>
+
+      {error && <p style={{ color: "crimson", marginTop: 12 }}>{error}</p>}
 
       <p style={{ marginTop: 16, fontSize: 14, opacity: 0.7 }}>
         Não tem conta? <a href={`/auth/sign-up?role=${role}`}>Criar conta</a>
