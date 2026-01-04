@@ -33,17 +33,21 @@ export async function middleware(req: NextRequest) {
   }
 
   // ✅ Protect owner
-  if (pathname.startsWith("/owner")) {
-    if (!isAuth) {
-      return NextResponse.redirect(new URL(`/auth/sign-in?role=OWNER`, req.url));
-    }
-    if (role !== "OWNER") {
-      return NextResponse.redirect(new URL(`/tenant`, req.url));
-    }
-    if (!ownerPaid) {
-      return NextResponse.redirect(new URL(`/paywall`, req.url));
-    }
+if (pathname.startsWith("/owner")) {
+  if (!isAuth) {
+    return NextResponse.redirect(new URL(`/auth/sign-in?role=OWNER`, req.url));
   }
+  if (role !== "OWNER") {
+    return NextResponse.redirect(new URL(`/tenant`, req.url));
+  }
+
+  const trialEndsAt = token?.trialEndsAt ? new Date(token.trialEndsAt as any) : null;
+  const inTrial = trialEndsAt ? Date.now() < trialEndsAt.getTime() : false;
+
+  if (!ownerPaid && !inTrial) {
+    return NextResponse.redirect(new URL(`/paywall`, req.url));
+  }
+}
 
   // ✅ Paywall requires owner session
   if (pathname.startsWith("/paywall")) {
