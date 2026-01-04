@@ -31,7 +31,7 @@ export function SignInForm() {
       return;
     }
 
-    // deixa o middleware decidir (ou redireciona para /owner e ele manda)
+    // manda pro /owner; se for tenant, middleware manda pro /tenant
     router.push("/owner");
   }
 
