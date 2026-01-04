@@ -1,21 +1,24 @@
 "use client";
 
 import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 
-export default function SignInForm({ role }: { role: "TENANT" | "OWNER" }) {
+export function SignInForm() {
   const router = useRouter();
-  const [error, setError] = useState<string | null>(null);
+  const sp = useSearchParams();
+  const role = (sp.get("role") === "OWNER" ? "OWNER" : "TENANT") as "OWNER" | "TENANT";
+
   const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setError(null);
     setLoading(true);
+    setErr(null);
 
     const fd = new FormData(e.currentTarget);
-    const email = String(fd.get("email") ?? "").trim().toLowerCase();
+    const email = String(fd.get("email") ?? "");
     const password = String(fd.get("password") ?? "");
 
     const res = await signIn("credentials", {
@@ -27,8 +30,8 @@ export default function SignInForm({ role }: { role: "TENANT" | "OWNER" }) {
 
     setLoading(false);
 
-    if (!res || res.error) {
-      setError("E-mail, senha ou tipo de conta inválidos.");
+    if (!res?.ok) {
+      setErr("E-mail ou senha inválidos.");
       return;
     }
 
@@ -36,23 +39,13 @@ export default function SignInForm({ role }: { role: "TENANT" | "OWNER" }) {
   }
 
   return (
-    <main style={{ maxWidth: 420, margin: "40px auto", padding: 16 }}>
-      <h1 style={{ fontSize: 24, fontWeight: 700 }}>Entrar</h1>
-      <p style={{ opacity: 0.7, marginTop: 8 }}>Acesse sua conta para continuar.</p>
-
-      <form onSubmit={onSubmit} style={{ display: "grid", gap: 12, marginTop: 16 }}>
-        <input name="email" type="email" placeholder="Email" required />
-        <input name="password" type="password" placeholder="Senha" required />
-        <button type="submit" disabled={loading}>
-          {loading ? "Entrando..." : "Entrar"}
-        </button>
-      </form>
-
-      {error && <p style={{ color: "crimson", marginTop: 12 }}>{error}</p>}
-
-      <p style={{ marginTop: 16, fontSize: 14, opacity: 0.7 }}>
-        Não tem conta? <a href={`/auth/sign-up?role=${role}`}>Criar conta</a>
-      </p>
-    </main>
+    <form onSubmit={onSubmit} style={{ display: "grid", gap: 12, marginTop: 16 }}>
+      <input name="email" type="email" placeholder="Email" required />
+      <input name="password" type="password" placeholder="Senha" required />
+      <button type="submit" disabled={loading}>
+        {loading ? "Entrando..." : "Entrar"}
+      </button>
+      {err ? <p style={{ color: "crimson" }}>{err}</p> : null}
+    </form>
   );
 }
