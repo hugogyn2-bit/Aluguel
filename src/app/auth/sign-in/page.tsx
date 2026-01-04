@@ -4,11 +4,10 @@ import { redirect } from "next/navigation";
 export default async function Page({
   searchParams,
 }: {
-  searchParams: Promise<{ role?: string; error?: string }>;
+  searchParams: Promise<{ role?: string }>;
 }) {
   const sp = await searchParams;
   const role = sp?.role === "OWNER" ? "OWNER" : "TENANT";
-  const error = sp?.error ? decodeURIComponent(sp.error) : "";
 
   async function action(fd: FormData): Promise<void> {
     "use server";
@@ -20,19 +19,14 @@ export default async function Page({
       redirect(res.redirectTo);
     }
 
-    // Se deu erro, volta pra mesma tela com a msg
-    const msg = encodeURIComponent(res?.error ?? "Falha no login.");
-    redirect(`/auth/sign-in?role=${role}&error=${msg}`);
+    // se falhar, NÃO retorna objeto (pra não dar problema de typing)
+    // apenas deixa a página recarregar (ou depois a gente mostra mensagem)
   }
 
   return (
     <main style={{ maxWidth: 420, margin: "40px auto", padding: 16 }}>
       <h1 style={{ fontSize: 24, fontWeight: 700 }}>Entrar</h1>
       <p style={{ opacity: 0.7, marginTop: 8 }}>Acesse sua conta para continuar.</p>
-
-      {error ? (
-        <p style={{ marginTop: 12, color: "crimson" }}>{error}</p>
-      ) : null}
 
       <form action={action} style={{ display: "grid", gap: 12, marginTop: 16 }}>
         <input name="email" type="email" placeholder="Email" required />
