@@ -8,7 +8,6 @@ const signUpSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),
   name: z.string().optional(),
-  role: z.enum(["TENANT", "OWNER"]),
 });
 
 export async function signUpAction(fd: FormData) {
@@ -16,32 +15,29 @@ export async function signUpAction(fd: FormData) {
     email: String(fd.get("email") ?? "").trim().toLowerCase(),
     password: String(fd.get("password") ?? ""),
     name: String(fd.get("name") ?? "").trim() || undefined,
-    role: String(fd.get("role") ?? "TENANT") as "TENANT" | "OWNER",
   };
 
   const parsed = signUpSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, error: "Dados inválidos." };
 
-  const { email, password, name, role } = parsed.data;
+  const { email, password, name } = parsed.data;
 
   const exists = await prisma.user.findUnique({ where: { email } });
   if (exists) return { ok: false, error: "E-mail já cadastrado." };
 
   const passwordHash = await bcrypt.hash(password, 10);
 
-  // ✅ Trial de 3 dias só para OWNER
-  const trialEndsAt =
-    role === "OWNER" ? new Date(Date.now() + 3 * 24 * 60 * 60 * 1000) : null;
+  const trialEndsAt = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
 
   await prisma.user.create({
     data: {
       email,
       name,
       passwordHash,
-      role,
+      role: "OWNER",
       trialEndsAt,
     },
   });
 
-  return { ok: true, redirectTo: `/auth/sign-in?role=${role}` };
+  return { ok: true, redirectTo: "/auth/sign-in" };
 }
