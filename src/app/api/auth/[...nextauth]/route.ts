@@ -31,35 +31,36 @@ const handler = NextAuth({
         if (user.role !== role) return null;
 
         return {
-  id: user.id,
-  email: user.email,
-  name: user.name ?? undefined,
-  role: user.role,
-  ownerPaid: user.ownerPaid,
-  trialEndsAt: user.trialEndsAt?.toISOString() ?? null,
-} as any;
+          id: user.id,
+          email: user.email,
+          name: user.name ?? undefined,
+          role: user.role,
+          ownerPaid: user.ownerPaid,
+          // ✅ manda como string ISO (ou undefined)
+          trialEndsAt: user.trialEndsAt ? user.trialEndsAt.toISOString() : undefined,
+        } as any;
       },
     }),
   ],
 
   callbacks: {
     async jwt({ token, user }) {
-  if (user) {
-    token.id = (user as any).id;
-    token.role = (user as any).role;
-    token.ownerPaid = (user as any).ownerPaid;
-    token.trialEndsAt = (user as any).trialEndsAt;
-  }
-  return token;
-}
+      if (user) {
+        token.id = (user as any).id;
+        token.role = (user as any).role;
+        token.ownerPaid = (user as any).ownerPaid;
+        token.trialEndsAt = (user as any).trialEndsAt; // string ISO | undefined
+      }
+      return token;
+    },
 
     async session({ session, token }) {
-  (session as any).user.id = token.id;
-  (session as any).user.role = token.role;
-  (session as any).user.ownerPaid = token.ownerPaid;
-  (session as any).user.trialEndsAt = token.trialEndsAt;
-  return session;
-}
+      (session as any).user.id = token.id;
+      (session as any).user.role = token.role;
+      (session as any).user.ownerPaid = token.ownerPaid;
+      (session as any).user.trialEndsAt = token.trialEndsAt; // string ISO | undefined
+      return session;
+    },
   },
 
   pages: { signIn: "/auth/sign-in" },
