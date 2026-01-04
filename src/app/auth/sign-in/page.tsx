@@ -1,50 +1,19 @@
-import { AuthShell } from "../_ui";
-import { signInAction } from "../actions";
-import { redirect } from "next/navigation";
+import { Suspense } from "react";
+import { SignInForm } from "./SignInForm";
 
-export default async function Page({
-  searchParams,
-}: {
-  searchParams: Promise<{ role?: string }>;
-}) {
-  const sp = await searchParams;
-  const role = sp?.role === "OWNER" ? "OWNER" : "TENANT";
-
-  async function action(fd: FormData) {
-    "use server";
-    fd.set("role", role);
-    const res = await signInAction(fd);
-
-    if (res?.ok && res?.redirectTo) redirect(res.redirectTo);
-    return;
-  }
-
+export default function Page() {
   return (
-    <AuthShell title="Entrar" subtitle="Acesse sua conta para continuar.">
-      <form action={action} className="grid gap-3">
-        <input
-          name="email"
-          type="email"
-          placeholder="Email"
-          required
-          className="border rounded p-2"
-        />
-        <input
-          name="password"
-          type="password"
-          placeholder="Senha"
-          required
-          className="border rounded p-2"
-        />
+    <main style={{ maxWidth: 420, margin: "40px auto", padding: 16 }}>
+      <h1 style={{ fontSize: 24, fontWeight: 700 }}>Entrar</h1>
+      <p style={{ opacity: 0.7, marginTop: 8 }}>Acesse sua conta para continuar.</p>
 
-        <button type="submit" className="rounded bg-black text-white p-2">
-          Entrar
-        </button>
+      <Suspense fallback={null}>
+        <SignInForm />
+      </Suspense>
 
-        <a className="text-sm underline" href={`/auth/sign-up?role=${role}`}>
-          Criar conta
-        </a>
-      </form>
-    </AuthShell>
+      <p style={{ marginTop: 16, fontSize: 14, opacity: 0.7 }}>
+        Não tem conta? <a href={`/auth/sign-up`}>Criar conta</a>
+      </p>
+    </main>
   );
 }
