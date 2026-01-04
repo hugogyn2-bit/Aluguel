@@ -1,14 +1,11 @@
 "use client";
 
 import { signIn } from "next-auth/react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 export function SignInForm() {
   const router = useRouter();
-  const sp = useSearchParams();
-  const role = (sp.get("role") === "OWNER" ? "OWNER" : "TENANT") as "OWNER" | "TENANT";
-
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -18,14 +15,13 @@ export function SignInForm() {
     setErr(null);
 
     const fd = new FormData(e.currentTarget);
-    const email = String(fd.get("email") ?? "").trim().toLowerCase();
+    const email = String(fd.get("email") ?? "");
     const password = String(fd.get("password") ?? "");
 
     const res = await signIn("credentials", {
       redirect: false,
       email,
       password,
-      role,
     });
 
     setLoading(false);
@@ -35,7 +31,8 @@ export function SignInForm() {
       return;
     }
 
-    router.push(role === "OWNER" ? "/owner" : "/tenant");
+    // deixa o middleware decidir (ou redireciona para /owner e ele manda)
+    router.push("/owner");
   }
 
   return (
