@@ -14,13 +14,13 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
+  uses: actions/setup-node@v4
+  with:
+    node-version: 20
 
-      - name: Install deps (updates package-lock)
-        run: npm install
+      - name: Install deps (generate package-lock.json)
+  run: npm install --package-lock-only
+
 
       - name: Commit changes (if any)
         run: |
