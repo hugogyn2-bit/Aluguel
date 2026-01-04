@@ -15,16 +15,17 @@ export function PayButton({ label = "Assinar Premium" }: { label?: string }) {
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        setErr(data?.error || `Erro ${res.status}`);
+        setErr(data?.error || `Erro (${res.status}) ao iniciar pagamento.`);
         return;
       }
 
-      if (!data?.url) {
+      const url = data?.url;
+      if (!url) {
         setErr("Resposta sem URL de checkout.");
         return;
       }
 
-      window.location.href = data.url;
+      window.location.assign(url);
     } catch (e: any) {
       setErr(e?.message || "Erro inesperado.");
     } finally {
@@ -34,9 +35,15 @@ export function PayButton({ label = "Assinar Premium" }: { label?: string }) {
 
   return (
     <div style={{ display: "grid", gap: 8 }}>
-      <button type="button" onClick={onClick} disabled={loading}>
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={loading}
+        style={{ padding: 12, borderRadius: 10, cursor: loading ? "not-allowed" : "pointer" }}
+      >
         {loading ? "Abrindo checkout..." : label}
       </button>
+
       {err ? <p style={{ color: "crimson", fontSize: 14 }}>{err}</p> : null}
     </div>
   );
