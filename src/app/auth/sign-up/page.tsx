@@ -4,20 +4,25 @@ import { redirect } from "next/navigation";
 export default async function Page({
   searchParams,
 }: {
-  searchParams: Promise<{ role?: string }>;
+  searchParams: Promise<{ role?: string; error?: string }>;
 }) {
   const sp = await searchParams;
   const role = sp?.role === "OWNER" ? "OWNER" : "TENANT";
+  const error = sp?.error ? decodeURIComponent(sp.error) : "";
 
-  async function action(fd: FormData) {
+  async function action(fd: FormData): Promise<void> {
     "use server";
     fd.set("role", role);
+
     const res = await signUpAction(fd);
 
-    // se sua action retorna redirectTo, já redireciona aqui
-    if (res?.ok && res?.redirectTo) redirect(res.redirectTo);
+    if (res?.ok && res?.redirectTo) {
+      redirect(res.redirectTo);
+    }
 
-    return res;
+    // Se deu erro, volta pra mesma tela com a msg
+    const msg = encodeURIComponent(res?.error ?? "Falha ao cadastrar.");
+    redirect(`/auth/sign-up?role=${role}&error=${msg}`);
   }
 
   return (
@@ -25,11 +30,12 @@ export default async function Page({
       <h1 style={{ fontSize: 24, fontWeight: 700 }}>Criar conta</h1>
       <p style={{ opacity: 0.7, marginTop: 8 }}>Cadastre-se para continuar.</p>
 
+      {error ? <p style={{ marginTop: 12, color: "crimson" }}>{error}</p> : null}
+
       <form action={action} style={{ display: "grid", gap: 12, marginTop: 16 }}>
         <input name="name" placeholder="Nome (opcional)" />
         <input name="email" type="email" placeholder="Email" required />
         <input name="password" type="password" placeholder="Senha" minLength={6} required />
-
         <button type="submit">Criar conta</button>
       </form>
 
