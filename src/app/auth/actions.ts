@@ -64,6 +64,7 @@ export async function signInAction(fd: FormData) {
 
   const { email, password, role } = parsed.data;
 
+  // ✅ (Opcional) valida antes para dar erro amigável (não é obrigatório)
   const user = await prisma.user.findUnique({ where: { email } });
   if (!user) return { ok: false, error: "E-mail ou senha inválidos." };
 
@@ -74,6 +75,5 @@ export async function signInAction(fd: FormData) {
     return { ok: false, error: `Sua conta é do tipo ${user.role}.` };
   }
 
-  if (user.role === "OWNER") return { ok: true, redirectTo: "/owner" };
-  return { ok: true, redirectTo: "/tenant" };
-}
+  // ✅ AGORA SIM: cria sessão do NextAuth (token/cookie)
+  const { signIn }
