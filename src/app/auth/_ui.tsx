@@ -10,9 +10,9 @@ export function AuthShell({
   children: React.ReactNode;
 }) {
   return (
-    <div>
-      <h1>{title}</h1>
-      <p>{subtitle}</p>
+    <div className="max-w-md mx-auto p-6">
+      <h1 className="text-xl font-bold">{title}</h1>
+      <p className="text-gray-500 mb-4">{subtitle}</p>
       {children}
     </div>
   );
