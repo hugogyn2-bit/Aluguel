@@ -1,17 +1,28 @@
 import { NextResponse } from "next/server";
-import { getToken } from "next-auth/jwt";
-import { prisma } from "@/lib/prisma";
 
-export async function POST(req: Request) {
-  const token = await getToken({ req: req as any, secret: process.env.NEXTAUTH_SECRET });
-  if (!token?.uid) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+function getCheckoutUrl() {
+  return (
+    process.env.MERCADOPAGO_CHECKOUT_URL ||
+    process.env.NEXT_PUBLIC_MERCADOPAGO_CHECKOUT_URL ||
+    "https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=a3d9c55a69aa4d69b1345e1f1469d632"
+  );
+}
 
-  // Aqui você integraria Stripe/Mercado Pago e confirmaria webhooks etc.
-  // Para o app ficar funcional agora, marcamos como pago (mock).
-  await prisma.user.update({
-    where: { id: token.uid as string },
-    data: { ownerPaid: true },
-  });
+// GET: abre direto no browser (útil pra testar)
+export async function GET() {
+  return NextResponse.redirect(getCheckoutUrl());
+}
 
-  return NextResponse.json({ ok: true });
+// POST: usado pelo PayButton via fetch (retorna JSON)
+export async function POST() {
+  const url = getCheckoutUrl();
+
+  if (!url) {
+    return NextResponse.json(
+      { error: "Checkout URL não configurada (MERCADOPAGO_CHECKOUT_URL)." },
+      { status: 500 }
+    );
+  }
+
+  return NextResponse.json({ url });
 }
