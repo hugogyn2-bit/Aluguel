@@ -33,11 +33,12 @@ export async function signUpAction(fd: FormData) {
   const exists = await prisma.user.findUnique({ where: { email } });
   if (exists) return { ok: false, error: "E-mail já cadastrado." };
 
-  const passwordHash = await bcrypt.hash(password, 10);
+  const trialEndsAt =
+  role === "OWNER" ? new Date(Date.now() + 3 * 24 * 60 * 60 * 1000) : null;
 
-  await prisma.user.create({
-    data: { email, name, passwordHash, role },
-  });
+await prisma.user.create({
+  data: { email, name, passwordHash, role, trialEndsAt },
+});
 
   return { ok: true, redirectTo: `/auth/sign-in?role=${role}` };
 }
