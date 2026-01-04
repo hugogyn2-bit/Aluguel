@@ -1,6 +1,6 @@
-import SignUpForm from "./SignUpForm";
-
-export const dynamic = "force-dynamic";
+import { AuthShell } from "../_ui";
+import { signUpAction } from "../actions";
+import { redirect } from "next/navigation";
 
 export default async function Page({
   searchParams,
@@ -10,5 +10,47 @@ export default async function Page({
   const sp = await searchParams;
   const role = sp?.role === "OWNER" ? "OWNER" : "TENANT";
 
-  return <SignUpForm role={role} />;
+  async function action(fd: FormData) {
+    "use server";
+    fd.set("role", role);
+    const res = await signUpAction(fd);
+
+    if (res?.ok && res?.redirectTo) redirect(res.redirectTo);
+    return;
+  }
+
+  return (
+    <AuthShell title="Criar conta" subtitle="Cadastre-se para continuar.">
+      <form action={action} className="grid gap-3">
+        <input
+          name="name"
+          placeholder="Nome (opcional)"
+          className="border rounded p-2"
+        />
+        <input
+          name="email"
+          type="email"
+          placeholder="Email"
+          required
+          className="border rounded p-2"
+        />
+        <input
+          name="password"
+          type="password"
+          placeholder="Senha"
+          minLength={6}
+          required
+          className="border rounded p-2"
+        />
+
+        <button type="submit" className="rounded bg-black text-white p-2">
+          Criar conta
+        </button>
+
+        <a className="text-sm underline" href={`/auth/sign-in?role=${role}`}>
+          Entrar
+        </a>
+      </form>
+    </AuthShell>
+  );
 }
