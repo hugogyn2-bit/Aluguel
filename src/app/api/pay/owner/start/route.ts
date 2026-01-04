@@ -14,6 +14,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Somente OWNER pode assinar" }, { status: 403 });
     }
 
+    // URL do checkout (coloque no ENV da Vercel)
     const url =
       process.env.MERCADOPAGO_CHECKOUT_URL ||
       process.env.NEXT_PUBLIC_MERCADOPAGO_CHECKOUT_URL ||
