@@ -1,32 +1,23 @@
-generator client {
-  provider = "prisma-client-js"
-}
-
-datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-}
-
-enum Role {
-  TENANT
-  OWNER
-}
-
 model User {
   id           String   @id @default(cuid())
   email        String   @unique
   name         String?
   passwordHash String
-  role         Role     @default(TENANT)
-
-  ownerPaid    Boolean  @default(false)
-  trialEndsAt  DateTime?
-
-  // Tenant pertence a um Owner
-  ownerId      String?
-  owner        User?    @relation("OwnerTenants", fields: [ownerId], references: [id])
-  tenants      User[]   @relation("OwnerTenants")
-
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+
+  tenants      Tenant[]
+}
+
+model Tenant {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String?
+  passwordHash String
+  mustChangePassword Boolean @default(true) // inquilino troca a senha no 1º login
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  ownerId      String
+  owner        User     @relation(fields: [ownerId], references: [id])
 }
