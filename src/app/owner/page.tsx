@@ -1,53 +1,63 @@
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
-import { Button } from "@/components/Button";
-import { LogOut, Building2, Wallet, BarChart3, Headset } from "lucide-react";
+import Link from "next/link";
+import { Building2, Wallet, BarChart3, Headphones } from "lucide-react";
 
-export default async function Page() {
-  const session = await getServerSession(authOptions);
-  const email = session?.user?.email ?? "Proprietário";
-
+function CardLink({
+  href,
+  icon,
+  title,
+  subtitle,
+}: {
+  href: string;
+  icon: React.ReactNode;
+  title: string;
+  subtitle: string;
+}) {
   return (
-    <main className="mx-auto max-w-4xl px-5 py-10">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <div className="text-2xl font-black tracking-tight">Painel do Proprietário</div>
-          <div className="text-sm text-muted mt-1">Olá, {email}</div>
-        </div>
-
-        <form action="/api/signout" method="post">
-          <Button variant="outline" type="submit">
-            <LogOut className="h-4 w-4" /> Sair
-          </Button>
-        </form>
+    <Link
+      href={href}
+      className="flex items-center gap-4 rounded-2xl bg-white/5 p-5 transition hover:bg-white/10 active:scale-[0.98]"
+    >
+      <div className="h-12 w-12 rounded-xl bg-indigo-600/20 grid place-items-center text-indigo-400">
+        {icon}
       </div>
-
-      <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Tile title="Imóveis" subtitle="Cadastre e edite" Icon={Building2} />
-        <Tile title="Aluguéis" subtitle="Cobranças e status" Icon={Wallet} />
-        <Tile title="Relatórios" subtitle="Receitas e métricas" Icon={BarChart3} />
-        <Tile title="Suporte" subtitle="Atendimento premium" Icon={Headset} />
+      <div>
+        <h2 className="font-bold">{title}</h2>
+        <p className="text-sm text-white/70">{subtitle}</p>
       </div>
-
-      <div className="mt-10 text-sm text-muted">
-        Este é um dashboard funcional base. Você pode conectar seus módulos reais aqui.
-      </div>
-    </main>
+    </Link>
   );
 }
 
-function Tile({ title, subtitle, Icon }: { title: string; subtitle: string; Icon: any }) {
+export default function OwnerDashboard() {
   return (
-    <div className="rounded-3xl bg-surface/90 border border-white/10 p-6">
-      <div className="flex items-center gap-4">
-        <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-primary/85 to-secondary/55 grid place-items-center">
-          <Icon className="h-5 w-5" />
-        </div>
-        <div>
-          <div className="font-extrabold tracking-tight">{title}</div>
-          <div className="text-sm text-muted mt-1">{subtitle}</div>
-        </div>
-      </div>
-    </div>
+    <main className="mx-auto max-w-2xl px-5 py-10 space-y-4">
+      <CardLink
+        href="/owner/properties"
+        icon={<Building2 />}
+        title="Imóveis"
+        subtitle="Cadastre e edite"
+      />
+
+      <CardLink
+        href="/owner/rentals"
+        icon={<Wallet />}
+        title="Aluguéis"
+        subtitle="Cobranças e status"
+      />
+
+      <CardLink
+        href="/owner/reports"
+        icon={<BarChart3 />}
+        title="Relatórios"
+        subtitle="Receitas e métricas"
+      />
+
+      <CardLink
+        href="/owner/support"
+        icon={<Headphones />}
+        title="Suporte"
+        subtitle="Atendimento premium"
+      />
+    </main>
   );
 }
