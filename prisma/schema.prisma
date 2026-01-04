@@ -1,3 +1,12 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
 enum Role {
   TENANT
   OWNER
@@ -10,11 +19,10 @@ model User {
   passwordHash String
   role         Role     @default(TENANT)
 
-  // premium
   ownerPaid    Boolean  @default(false)
   trialEndsAt  DateTime?
 
-  // vínculo opcional: tenant pertence a um owner
+  // Tenant pertence a um Owner
   ownerId      String?
   owner        User?    @relation("OwnerTenants", fields: [ownerId], references: [id])
   tenants      User[]   @relation("OwnerTenants")
