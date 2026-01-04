@@ -17,7 +17,7 @@ const handler = NextAuth({
       async authorize(credentials) {
         const email = String(credentials?.email ?? "").trim().toLowerCase();
         const password = String(credentials?.password ?? "");
-        const role = (String(credentials?.role ?? "TENANT") as "TENANT" | "OWNER");
+        const role = String(credentials?.role ?? "TENANT") as "TENANT" | "OWNER";
 
         if (!email || !password) return null;
 
@@ -27,6 +27,7 @@ const handler = NextAuth({
         const ok = await bcrypt.compare(password, user.passwordHash);
         if (!ok) return null;
 
+        // Se tentar logar com role diferente do cadastrado, bloqueia
         if (user.role !== role) return null;
 
         return {
@@ -35,6 +36,8 @@ const handler = NextAuth({
           name: user.name ?? undefined,
           role: user.role,
           ownerPaid: user.ownerPaid,
+          // ✅ manda trialEndsAt junto
+          trialEndsAt: user.trialEndsAt ? user.trialEndsAt.toISOString() : null,
         } as any;
       },
     }),
@@ -42,17 +45,22 @@ const handler = NextAuth({
 
   callbacks: {
     async jwt({ token, user }) {
+      // ✅ Na primeira vez (login), copia do user pro token
       if (user) {
         token.id = (user as any).id;
         token.role = (user as any).role;
         token.ownerPaid = (user as any).ownerPaid;
+        token.trialEndsAt = (user as any).trialEndsAt ?? null;
       }
       return token;
     },
+
     async session({ session, token }) {
+      // ✅ expõe no session.user
       (session as any).user.id = token.id;
       (session as any).user.role = token.role;
       (session as any).user.ownerPaid = token.ownerPaid;
+      (session as any).user.trialEndsAt = (token as any).trialEndsAt ?? null;
       return session;
     },
   },
