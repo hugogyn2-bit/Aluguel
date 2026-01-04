@@ -8,12 +8,21 @@ function getCheckoutUrl() {
   );
 }
 
-// Navegar direto no browser (ex: window.location = "/api/pay/owner/start")
+// GET: abre direto no browser (útil pra testar)
 export async function GET() {
   return NextResponse.redirect(getCheckoutUrl());
 }
 
-// Usar via fetch (ex: fetch("/api/pay/owner/start", { method: "POST" }))
+// POST: usado pelo PayButton via fetch (retorna JSON)
 export async function POST() {
-  return NextResponse.json({ url: getCheckoutUrl() });
+  const url = getCheckoutUrl();
+
+  if (!url) {
+    return NextResponse.json(
+      { error: "Checkout URL não configurada (MERCADOPAGO_CHECKOUT_URL)." },
+      { status: 500 }
+    );
+  }
+
+  return NextResponse.json({ url });
 }
