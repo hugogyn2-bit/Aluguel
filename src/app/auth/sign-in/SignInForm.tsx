@@ -15,11 +15,11 @@ export function SignInForm() {
     setErr(null);
 
     const fd = new FormData(e.currentTarget);
-    const email = String(fd.get("email") ?? "");
+    const email = String(fd.get("email") ?? "").trim().toLowerCase();
     const password = String(fd.get("password") ?? "");
 
     const res = await signIn("credentials", {
-      redirect: false, // 👈 MUITO IMPORTANTE
+      redirect: false,
       email,
       password,
     });
@@ -31,20 +31,18 @@ export function SignInForm() {
       return;
     }
 
-    // ✅ REDIRECT FINAL É AQUI
-    router.push("/owner");
+    // ✅ Redirect final: chama um endpoint que decide pelo role do usuário logado
+    router.push("/api/post-login");
   }
 
   return (
-    <form onSubmit={onSubmit} style={{ display: "grid", gap: 12 }}>
+    <form onSubmit={onSubmit} style={{ display: "grid", gap: 12, marginTop: 16 }}>
       <input name="email" type="email" placeholder="Email" required />
       <input name="password" type="password" placeholder="Senha" required />
-
       <button type="submit" disabled={loading}>
         {loading ? "Entrando..." : "Entrar"}
       </button>
-
-      {err && <p style={{ color: "crimson" }}>{err}</p>}
+      {err ? <p style={{ color: "crimson" }}>{err}</p> : null}
     </form>
   );
 }
