@@ -2,79 +2,88 @@
 
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
-import { getToken } from "next-auth/jwt";
-import { redirect } from "next/navigation";
 import { z } from "zod";
+import { getToken } from "next-auth/jwt";
 import { headers } from "next/headers";
 
 const createTenantSchema = z.object({
-  fullName: z.string().min(2, "Nome muito curto"),
-  email: z.string().email("Email inválido"),
-  phone: z.string().optional(),
-  tempPassword: z.string().min(6, "Senha mínima é 6"),
+  email: z.string().email(),
+  password: z.string().min(4, "Senha muito curta."),
+  fullName: z.string().min(3, "Nome muito curto."),
+  cpf: z.string().min(11).max(14),
+  rg: z.string().min(3),
+  address: z.string().min(5),
+  cep: z.string().min(8).max(9),
 });
 
-export async function createTenantAction(fd: FormData) {
-  // ✅ pega request headers pra conseguir ler o token no Server Action
-  const h = await headers();
+function normalizeCpf(cpf: string) {
+  return cpf.replace(/\D/g, ""); // só números
+}
 
+function normalizeCep(cep: string) {
+  return cep.replace(/\D/g, ""); // só números
+}
+
+export async function createTenantAction(fd: FormData) {
+  // pega token (owner) pela request headers
+  const h = await headers();
   const token = await getToken({
     req: { headers: Object.fromEntries(h.entries()) } as any,
     secret: process.env.NEXTAUTH_SECRET,
   });
 
-  if (!token) {
-    // não autenticado -> manda pro login do OWNER
-    redirect("/auth/sign-in?role=OWNER");
-  }
-
-  if ((token as any).role !== "OWNER") {
-    throw new Error("Somente OWNER pode criar inquilino.");
-  }
+  if (!token) return { ok: false, error: "Não autenticado." };
+  if (token.role !== "OWNER") return { ok: false, error: "Apenas OWNER pode criar inquilino." };
 
   const raw = {
-    fullName: String(fd.get("fullName") ?? "").trim(),
     email: String(fd.get("email") ?? "").trim().toLowerCase(),
-    phone: String(fd.get("phone") ?? "").trim() || undefined,
-    tempPassword: String(fd.get("tempPassword") ?? ""),
+    password: String(fd.get("password") ?? ""),
+    fullName: String(fd.get("fullName") ?? "").trim(),
+    cpf: normalizeCpf(String(fd.get("cpf") ?? "")),
+    rg: String(fd.get("rg") ?? "").trim(),
+    address: String(fd.get("address") ?? "").trim(),
+    cep: normalizeCep(String(fd.get("cep") ?? "")),
   };
 
   const parsed = createTenantSchema.safeParse(raw);
-  if (!parsed.success) {
-    return { ok: false, error: "Dados inválidos. Verifique os campos." };
-  }
+  if (!parsed.success) return { ok: false, error: "Dados inválidos.", issues: parsed.error.issues };
 
-  const { fullName, email, phone, tempPassword } = parsed.data;
+  const { email, password, fullName, cpf, rg, address, cep } = parsed.data;
+  const ownerId = String(token.id);
 
-  // ✅ checa se já existe usuário com esse e-mail
-  const exists = await prisma.user.findUnique({ where: { email } });
-  if (exists) {
-    return { ok: false, error: "Já existe um usuário com esse e-mail." };
-  }
+  // bloqueia se email já existe
+  const existsEmail = await prisma.user.findUnique({ where: { email } });
+  if (existsEmail) return { ok: false, error: "E-mail já cadastrado." };
 
-  // ✅ cria usuário TENANT
-  const passwordHash = await bcrypt.hash(tempPassword, 10);
+  // bloqueia se cpf já existe
+  const existsCpf = await prisma.tenantProfile.findUnique({ where: { cpf } });
+  if (existsCpf) return { ok: false, error: "CPF já cadastrado." };
 
-  const ownerId = String((token as any).id);
+  const passwordHash = await bcrypt.hash(password, 10);
 
-  await prisma.user.create({
-    data: {
-      email,
-      name: fullName,
-      passwordHash,
-      role: "TENANT",
-      ownerPaid: false,
-      trialEndsAt: null,
-      tenantProfile: {
-        create: {
-          fullName,
-          phone,
-          ownerId,
-        },
+  // cria tudo em transação
+  await prisma.$transaction(async (tx) => {
+    const tenantUser = await tx.user.create({
+      data: {
+        email,
+        passwordHash,
+        role: "TENANT",
+        name: fullName,
       },
-    },
+    });
+
+    await tx.tenantProfile.create({
+      data: {
+        userId: tenantUser.id,
+        ownerId,
+        fullName,
+        cpf,
+        rg,
+        address,
+        cep,
+      },
+    });
   });
 
-  // ✅ volta para a lista (ou a própria página) com sucesso
   return { ok: true };
 }
