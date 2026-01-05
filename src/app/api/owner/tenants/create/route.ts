@@ -60,7 +60,7 @@ export async function POST(req: Request) {
     const existsEmail = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
     if (existsEmail) return NextResponse.json({ error: "E-mail já cadastrado" }, { status: 409 });
 
-    const existsCpf = await prisma.tenantProfile.findUnique({ where: { cpf } });
+    const existsCpf = await prisma.tenantProfile.findFirst({ where: { cpf } });
     if (existsCpf) return NextResponse.json({ error: "CPF já cadastrado" }, { status: 409 });
 
     const tempPassword = makeTempPassword(10);
