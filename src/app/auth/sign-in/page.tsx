@@ -10,10 +10,6 @@ export default function Page() {
       <Suspense fallback={null}>
         <SignInForm />
       </Suspense>
-
-      <p style={{ marginTop: 16, fontSize: 14, opacity: 0.7 }}>
-        Não tem conta? <a href={`/auth/sign-up`}>Criar conta</a>
-      </p>
     </main>
   );
 }
