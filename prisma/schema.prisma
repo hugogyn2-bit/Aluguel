@@ -1,3 +1,12 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
 enum Role {
   TENANT
   OWNER
@@ -8,34 +17,43 @@ model User {
   email        String   @unique
   name         String?
   passwordHash String
+
   role         Role     @default(TENANT)
+
+  // Premium
   ownerPaid    Boolean  @default(false)
   trialEndsAt  DateTime?
 
-  // ✅ se for TENANT, vai ter 1 perfil
-  tenantProfile TenantProfile?
-
-  // ✅ se for OWNER, pode ter vários tenants
-  tenants TenantProfile[] @relation("OwnerTenants")
-
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+
+  // ✅ Se esse usuário for TENANT, terá um perfil
+  tenantProfile TenantProfile? @relation("TenantUser")
+
+  // ✅ Se esse usuário for OWNER, poderá ter vários tenants vinculados
+  ownedTenants   TenantProfile[] @relation("OwnerTenants")
 }
 
 model TenantProfile {
-  id        String @id @default(cuid())
+  id        String   @id @default(cuid())
 
-  fullName  String
-  phone     String?
+  // 🔗 vínculo com TENANT (User)
+  userId    String   @unique
+  user      User     @relation("TenantUser", fields: [userId], references: [id], onDelete: Cascade)
 
-  // ✅ liga com o User TENANT (1-1)
-  userId    String @unique
-  user      User   @relation(fields: [userId], references: [id])
-
-  // ✅ liga com o User OWNER (N-1)
+  // 🔗 vínculo com OWNER (User) que criou o TENANT
   ownerId   String
-  owner     User   @relation("OwnerTenants", fields: [ownerId], references: [id])
+  owner     User     @relation("OwnerTenants", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  // 🧾 dados do inquilino
+  fullName  String
+  cpf       String   @unique
+  rg        String
+  address   String
+  cep       String
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([ownerId])
 }
