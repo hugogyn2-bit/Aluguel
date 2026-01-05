@@ -1,0 +1,12 @@
+import { NextResponse } from "next/server";
+import { getToken } from "next-auth/jwt";
+
+export const runtime = "nodejs";
+
+export async function GET(req: Request) {
+  const token = await getToken({ req: req as any, secret: process.env.NEXTAUTH_SECRET });
+  if (!token) return NextResponse.redirect(new URL("/auth/sign-in", req.url));
+
+  if (token.role === "OWNER") return NextResponse.redirect(new URL("/owner", req.url));
+  return NextResponse.redirect(new URL("/tenant", req.url));
+}
