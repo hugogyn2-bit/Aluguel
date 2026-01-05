@@ -3,61 +3,78 @@
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { getToken } from "next-auth/jwt";
-import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { z } from "zod";
+import { headers } from "next/headers";
 
-const schema = z.object({
-  email: z.string().email(),
-  fullName: z.string().min(2),
+const createTenantSchema = z.object({
+  fullName: z.string().min(2, "Nome muito curto"),
+  email: z.string().email("Email inválido"),
   phone: z.string().optional(),
-  tempPassword: z.string().min(6),
+  tempPassword: z.string().min(6, "Senha mínima é 6"),
 });
 
 export async function createTenantAction(fd: FormData) {
-  // ✅ pega o token do request atual
-  const h = headers();
-  const req = { headers: Object.fromEntries(h.entries()) } as any;
+  // ✅ pega request headers pra conseguir ler o token no Server Action
+  const h = await headers();
 
-  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
-  if (!token) return { ok: false, error: "Não autenticado." };
-  if (token.role !== "OWNER") return { ok: false, error: "Apenas OWNER." };
+  const token = await getToken({
+    req: { headers: Object.fromEntries(h.entries()) } as any,
+    secret: process.env.NEXTAUTH_SECRET,
+  });
+
+  if (!token) {
+    // não autenticado -> manda pro login do OWNER
+    redirect("/auth/sign-in?role=OWNER");
+  }
+
+  if ((token as any).role !== "OWNER") {
+    throw new Error("Somente OWNER pode criar inquilino.");
+  }
 
   const raw = {
-    email: String(fd.get("email") ?? "").trim().toLowerCase(),
     fullName: String(fd.get("fullName") ?? "").trim(),
+    email: String(fd.get("email") ?? "").trim().toLowerCase(),
     phone: String(fd.get("phone") ?? "").trim() || undefined,
     tempPassword: String(fd.get("tempPassword") ?? ""),
   };
 
-  const parsed = schema.safeParse(raw);
-  if (!parsed.success) return { ok: false, error: "Dados inválidos." };
+  const parsed = createTenantSchema.safeParse(raw);
+  if (!parsed.success) {
+    return { ok: false, error: "Dados inválidos. Verifique os campos." };
+  }
 
-  const { email, fullName, phone, tempPassword } = parsed.data;
+  const { fullName, email, phone, tempPassword } = parsed.data;
 
+  // ✅ checa se já existe usuário com esse e-mail
   const exists = await prisma.user.findUnique({ where: { email } });
-  if (exists) return { ok: false, error: "E-mail já existe." };
+  if (exists) {
+    return { ok: false, error: "Já existe um usuário com esse e-mail." };
+  }
 
+  // ✅ cria usuário TENANT
   const passwordHash = await bcrypt.hash(tempPassword, 10);
 
-  // 1) cria o user TENANT
-  const tenantUser = await prisma.user.create({
+  const ownerId = String((token as any).id);
+
+  await prisma.user.create({
     data: {
       email,
       name: fullName,
       passwordHash,
       role: "TENANT",
+      ownerPaid: false,
+      trialEndsAt: null,
+      tenantProfile: {
+        create: {
+          fullName,
+          phone,
+          ownerId,
+        },
+      },
     },
   });
 
-  // 2) cria o profile e liga ao owner
-  await prisma.tenantProfile.create({
-    data: {
-      fullName,
-      phone,
-      ownerId: String(token.id),
-      userId: tenantUser.id,
-    },
-  });
-
+  // ✅ volta para a lista (ou a própria página) com sucesso
   return { ok: true };
 }
