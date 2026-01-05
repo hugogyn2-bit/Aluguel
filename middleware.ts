@@ -31,11 +31,11 @@ export async function middleware(req: NextRequest) {
 
   // trialEndsAt vem como string ISO (do JWT)
   const trialEndsAt = token?.trialEndsAt ? new Date(String(token.trialEndsAt)) : null;
-  const inTrial = trialEndsAt ? Date.now() < trialEndsAt.getTime() : false;
+  const inTrial = !!trialEndsAt && Date.now() < trialEndsAt.getTime();
 
   const ownerPaid = !!token?.ownerPaid;
 
-  // ✅ Auth pages: garante role param
+  // ✅ Auth pages: garante role param (UX)
   if (pathname === "/auth/sign-in" || pathname === "/auth/sign-up") {
     const r = searchParams.get("role");
     if (!r) {
@@ -46,6 +46,14 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
+  // ✅ Paywall: requer OWNER logado
+  // (IMPORTANTE: não pode redirecionar /paywall pra /paywall, senão loop)
+  if (pathname.startsWith("/paywall")) {
+    if (!isAuth) return redirectTo(`/auth/sign-in?role=OWNER`, req);
+    if (role !== "OWNER") return redirectTo(`/tenant`, req);
+    return NextResponse.next();
+  }
+
   // ✅ Protect tenant
   if (pathname.startsWith("/tenant")) {
     if (!isAuth) return redirectTo(`/auth/sign-in?role=TENANT`, req);
@@ -53,21 +61,14 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // ✅ Protect owner
+  // ✅ Protect owner (inclui /owner/tenants)
   if (pathname.startsWith("/owner")) {
     if (!isAuth) return redirectTo(`/auth/sign-in?role=OWNER`, req);
     if (role !== "OWNER") return redirectTo(`/tenant`, req);
 
-    // dono só passa se pagou OU está no trial
+    // ✅ dono só passa se pagou OU está no trial
     if (!ownerPaid && !inTrial) return redirectTo(`/paywall`, req);
 
-    return NextResponse.next();
-  }
-
-  // ✅ Paywall requer OWNER logado
-  if (pathname.startsWith("/paywall")) {
-    if (!isAuth) return redirectTo(`/auth/sign-in?role=OWNER`, req);
-    if (role !== "OWNER") return redirectTo(`/tenant`, req);
     return NextResponse.next();
   }
 
@@ -78,7 +79,7 @@ export const config = {
   matcher: [
     "/tenant/:path*",
     "/owner/:path*",
-    "/paywall",
+    "/paywall/:path*",
     "/auth/sign-in",
     "/auth/sign-up",
     "/login",
