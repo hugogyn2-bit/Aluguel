@@ -47,7 +47,8 @@ model TenantProfile {
 
   // 🧾 dados do inquilino
   fullName  String
-  cpf       String   @unique
+  cpf String
+@@index([cpf])
   rg        String
   address   String
   cep       String
