@@ -31,7 +31,7 @@ model User {
   tenantProfile TenantProfile? @relation("TenantUser")
 
   // ✅ Se esse usuário for OWNER, poderá ter vários tenants vinculados
-  ownedTenants   TenantProfile[] @relation("OwnerTenants")
+  ownedTenants  TenantProfile[] @relation("OwnerTenants")
 }
 
 model TenantProfile {
@@ -47,8 +47,7 @@ model TenantProfile {
 
   // 🧾 dados do inquilino
   fullName  String
-  cpf String
-@@index([cpf])
+  cpf       String   @unique
   rg        String
   address   String
   cep       String
