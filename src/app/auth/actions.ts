@@ -1,4 +1,3 @@
-// src/app/auth/actions.ts
 "use server";
 
 import { prisma } from "@/lib/prisma";
@@ -11,23 +10,31 @@ function nowPlusDays(days: number) {
   return new Date(Date.now() + days * 24 * 60 * 60 * 1000);
 }
 
-/** Helpers para ler token em Server Actions */
+/** Helper: ler token dentro de Server Actions */
 async function getAuthToken() {
-  // next-auth/jwt precisa do "req". Aqui a forma mais simples é usar headers/cookies atuais.
-  // Em Next.js App Router, dá para usar headers() e cookies() para montar um Request fake:
   const h = headers();
   const c = cookies();
 
   const req = new Request("http://localhost", {
     headers: {
       cookie: c.toString(),
-      // repassa alguns headers se quiser
       "x-forwarded-host": h.get("x-forwarded-host") ?? "",
       "x-forwarded-proto": h.get("x-forwarded-proto") ?? "",
     },
   });
 
   return getToken({ req: req as any, secret: process.env.NEXTAUTH_SECRET });
+}
+
+/* =========================
+   VALIDADORES
+========================= */
+
+const cpfRegex = /^\d{11}$/; // simples: 11 dígitos (sem máscara)
+const cepRegex = /^\d{8}$/;  // 8 dígitos (sem hífen)
+
+function onlyDigits(v: string) {
+  return v.replace(/\D/g, "");
 }
 
 /* =========================
@@ -69,19 +76,12 @@ export async function signUpAction(fd: FormData) {
   const trialEndsAt = role === "OWNER" ? nowPlusDays(3) : null;
 
   await prisma.user.create({
-    data: {
-      email,
-      name,
-      passwordHash,
-      role,
-      trialEndsAt,
-    },
+    data: { email, name, passwordHash, role, trialEndsAt },
   });
 
   return { ok: true, redirectTo: `/auth/sign-in?role=${role}` };
 }
 
-// (Opcional) você pode nem usar isso se o login é direto via next-auth/react
 export async function signInAction(fd: FormData) {
   const raw = {
     email: String(fd.get("email") ?? "").trim().toLowerCase(),
@@ -112,10 +112,13 @@ export async function signInAction(fd: FormData) {
 ========================= */
 
 const createTenantSchema = z.object({
-  fullName: z.string().min(2),
-  email: z.string().email(),
-  phone: z.string().optional(),
-  tempPassword: z.string().min(6),
+  fullName: z.string().min(3, "Nome completo obrigatório"),
+  email: z.string().email("Email inválido"),
+  cpf: z.string().transform(onlyDigits).refine((v) => cpfRegex.test(v), "CPF deve ter 11 dígitos"),
+  rg: z.string().min(3, "RG obrigatório"),
+  address: z.string().min(5, "Endereço obrigatório"),
+  cep: z.string().transform(onlyDigits).refine((v) => cepRegex.test(v), "CEP deve ter 8 dígitos"),
+  tempPassword: z.string().min(6, "Senha inicial mínimo 6"),
 });
 
 export async function createTenantAction(fd: FormData) {
@@ -127,22 +130,31 @@ export async function createTenantAction(fd: FormData) {
   const raw = {
     fullName: String(fd.get("fullName") ?? "").trim(),
     email: String(fd.get("email") ?? "").trim().toLowerCase(),
-    phone: String(fd.get("phone") ?? "").trim() || undefined,
+    cpf: String(fd.get("cpf") ?? ""),
+    rg: String(fd.get("rg") ?? "").trim(),
+    address: String(fd.get("address") ?? "").trim(),
+    cep: String(fd.get("cep") ?? ""),
     tempPassword: String(fd.get("tempPassword") ?? ""),
   };
 
   const parsed = createTenantSchema.safeParse(raw);
-  if (!parsed.success) return { ok: false, error: "Dados inválidos." };
+  if (!parsed.success) {
+    const msg = parsed.error.issues?.[0]?.message ?? "Dados inválidos.";
+    return { ok: false, error: msg };
+  }
 
-  const { fullName, email, phone, tempPassword } = parsed.data;
+  const { fullName, email, cpf, rg, address, cep, tempPassword } = parsed.data;
 
-  // não deixa usar email já existente
-  const exists = await prisma.user.findUnique({ where: { email } });
-  if (exists) return { ok: false, error: "Já existe um usuário com esse e-mail." };
+  // não deixa email repetido
+  const emailExists = await prisma.user.findUnique({ where: { email } });
+  if (emailExists) return { ok: false, error: "Já existe um usuário com esse e-mail." };
+
+  // não deixa CPF repetido
+  const cpfExists = await prisma.tenantProfile.findUnique({ where: { cpf } }).catch(() => null);
+  if (cpfExists) return { ok: false, error: "Já existe inquilino com esse CPF." };
 
   const passwordHash = await bcrypt.hash(tempPassword, 10);
 
-  // cria user TENANT + TenantProfile ligado ao owner logado
   await prisma.$transaction(async (tx) => {
     const user = await tx.user.create({
       data: {
@@ -155,13 +167,15 @@ export async function createTenantAction(fd: FormData) {
       },
     });
 
-    // ✅ Ajuste os campos conforme seu Prisma TenantProfile
     await tx.tenantProfile.create({
       data: {
         userId: user.id,
         ownerId: String(token.id),
         fullName,
-        phone,
+        cpf,
+        rg,
+        address,
+        cep,
       },
     });
   });
@@ -174,8 +188,8 @@ export async function createTenantAction(fd: FormData) {
 ========================= */
 
 const changePasswordSchema = z.object({
-  currentPassword: z.string().min(1),
-  newPassword: z.string().min(6),
+  currentPassword: z.string().min(1, "Senha atual obrigatória"),
+  newPassword: z.string().min(6, "Nova senha mínimo 6"),
 });
 
 export async function tenantChangePasswordAction(fd: FormData) {
@@ -190,7 +204,10 @@ export async function tenantChangePasswordAction(fd: FormData) {
   };
 
   const parsed = changePasswordSchema.safeParse(raw);
-  if (!parsed.success) return { ok: false, error: "Dados inválidos." };
+  if (!parsed.success) {
+    const msg = parsed.error.issues?.[0]?.message ?? "Dados inválidos.";
+    return { ok: false, error: msg };
+  }
 
   const { currentPassword, newPassword } = parsed.data;
 
@@ -201,10 +218,7 @@ export async function tenantChangePasswordAction(fd: FormData) {
   if (!ok) return { ok: false, error: "Senha atual incorreta." };
 
   const passwordHash = await bcrypt.hash(newPassword, 10);
-  await prisma.user.update({
-    where: { id: user.id },
-    data: { passwordHash },
-  });
+  await prisma.user.update({ where: { id: user.id }, data: { passwordHash } });
 
   return { ok: true };
 }
