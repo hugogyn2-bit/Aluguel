@@ -40,6 +40,12 @@ export function ForgotPasswordForm() {
   return (
     <form onSubmit={onSubmit} style={{ display: "grid", gap: 12, marginTop: 16 }}>
       <input name="email" type="email" placeholder="Seu email de OWNER" required />
+      <input
+        name="birthDate"
+        placeholder="Data de nascimento (dd/mm/aaaa)"
+        inputMode="numeric"
+        required
+      />
       <input name="newPassword" type="password" placeholder="Nova senha" minLength={6} required />
       <button type="submit" disabled={loading}>
         {loading ? "Salvando..." : "Redefinir senha"}

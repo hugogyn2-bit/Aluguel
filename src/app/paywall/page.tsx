@@ -13,8 +13,8 @@ export default function Page() {
       </div>
 
       <div style={{ marginTop: 12 }}>
-        <a href="/api/pay/owner/start" style={{ fontSize: 14 }}>
-          Teste (abrir via GET)
+        <a href="/api/owner/trial/start" style={{ fontSize: 14 }}>
+          Ativar teste grátis (3 dias)
         </a>
       </div>
     </main>

@@ -10,10 +10,27 @@ function nowPlusDays(days: number) {
   return new Date(Date.now() + days * 24 * 60 * 60 * 1000);
 }
 
+function parseBRDate(input: string): Date | null {
+  // esperado: dd/mm/aaaa
+  const m = /^([0-3]\d)\/([01]\d)\/(\d{4})$/.exec(input.trim());
+  if (!m) return null;
+  const dd = Number(m[1]);
+  const mm = Number(m[2]);
+  const yyyy = Number(m[3]);
+  // validação básica
+  if (mm < 1 || mm > 12) return null;
+  if (dd < 1 || dd > 31) return null;
+  // grava como meia-noite UTC (evita problemas de fuso)
+  const d = new Date(Date.UTC(yyyy, mm - 1, dd));
+  // garante que não estourou (ex: 31/02)
+  if (d.getUTCFullYear() !== yyyy || d.getUTCMonth() !== mm - 1 || d.getUTCDate() !== dd) return null;
+  return d;
+}
+
 /** Helper: ler token dentro de Server Actions */
 async function getAuthToken() {
-  const h = await headers();
-  const c = await cookies();
+  const h = headers();
+  const c = cookies();
 
   const req = new Request("http://localhost", {
     headers: {
@@ -47,6 +64,7 @@ const signUpSchema = z.object({
   name: z.string().optional(),
   // Cadastro público é apenas para OWNER
   role: z.literal("OWNER"),
+  birthDate: z.string().min(10).max(10), // dd/mm/aaaa
 });
 
 const signInSchema = z.object({
@@ -61,12 +79,16 @@ export async function signUpAction(fd: FormData) {
     password: String(fd.get("password") ?? ""),
     name: String(fd.get("name") ?? "").trim() || undefined,
     role: "OWNER" as const,
+    birthDate: String(fd.get("birthDate") ?? "").trim(),
   };
 
   const parsed = signUpSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, error: "Dados inválidos." };
 
-  const { email, password, name, role } = parsed.data;
+  const { email, password, name, role, birthDate } = parsed.data;
+
+  const birthDateParsed = parseBRDate(birthDate);
+  if (!birthDateParsed) return { ok: false, error: "Data de nascimento inválida (use dd/mm/aaaa)." };
 
   const exists = await prisma.user.findUnique({ where: { email } });
   if (exists) return { ok: false, error: "E-mail já cadastrado." };
@@ -77,7 +99,7 @@ export async function signUpAction(fd: FormData) {
   const trialEndsAt = nowPlusDays(3);
 
   await prisma.user.create({
-    data: { email, name, passwordHash, role, trialEndsAt },
+    data: { email, name, passwordHash, role, trialEndsAt, birthDate: birthDateParsed },
   });
 
   return { ok: true, redirectTo: `/auth/sign-in?role=${role}` };

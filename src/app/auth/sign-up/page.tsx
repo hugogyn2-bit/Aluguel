@@ -48,6 +48,13 @@ export default async function Page({
           className="border rounded p-2"
         />
 
+        <input
+          name="birthDate"
+          placeholder="Data de nascimento (dd/mm/aaaa)"
+          required
+          className="border rounded p-2"
+        />
+
         <button type="submit" className="rounded bg-black text-white p-2">
           Criar conta
         </button>
