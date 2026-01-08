@@ -4,12 +4,12 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbo",
-    "build": "node ./node_modules/prisma/build/index.js generate && node ./node_modules/prisma/build/index.js db push --accept-data-loss && node ./node_modules/next/dist/bin",
+    "build": "prisma generate && prisma db push --accept-data-loss && next build",
     "start": "next start",
     "lint": "next lint",
-    "prisma:generate": "node ./node_modules/prisma/build/index.js generate",
-    "prisma:migrate": "node ./node_modules/prisma/build/index.js migrate dev",
-    "prisma:studio": "node ./node_modules/prisma/build/index.js studio"
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:studio": "prisma studio"
   },
   "dependencies": {
     "@prisma/client": "^5.19.1",
