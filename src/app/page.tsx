@@ -7,9 +7,7 @@ export default function Page() {
     <main className="mx-auto max-w-3xl px-5 py-10">
       <div className="flex items-start justify-between gap-6">
         <Logo />
-        <div className="text-xs text-muted mt-2">
-          UI premium • Acesso por perfil • Guard de pagamento
-        </div>
+        <div className="text-xs text-muted mt-2">Sessão segura via NextAuth.</div>
       </div>
 
       <section className="mt-10">
@@ -40,7 +38,7 @@ export default function Page() {
         <div className="mt-8 flex items-start gap-3 rounded-3xl border border-white/10 bg-surface/75 p-5">
           <ShieldCheck className="h-5 w-5 text-secondary mt-0.5" />
           <p className="text-sm text-muted leading-relaxed">
-            Sessão segura via NextAuth. Rotas de proprietário são bloqueadas por middleware até o pagamento ser confirmado.
+            Sessão segura via NextAuth.
           </p>
         </div>
       </section>
