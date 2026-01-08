@@ -12,8 +12,8 @@ function nowPlusDays(days: number) {
 
 /** Helper: ler token dentro de Server Actions */
 async function getAuthToken() {
-  const h = headers();
-  const c = cookies();
+  const h = await headers();
+  const c = await cookies();
 
   const req = new Request("http://localhost", {
     headers: {
