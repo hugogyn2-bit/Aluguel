@@ -1,4 +1,5 @@
 import { Logo } from "@/components/Logo";
+import { ShieldCheck } from "lucide-react";
 
 export default function Page() {
   return (
