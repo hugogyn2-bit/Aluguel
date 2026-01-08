@@ -3,245 +3,94 @@
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
-import { getToken } from "next-auth/jwt";
-import { cookies, headers } from "next/headers";
 
-function nowPlusDays(days: number) {
-  return new Date(Date.now() + days * 24 * 60 * 60 * 1000);
-}
-
-function parseBRDate(input: string): Date | null {
-  // esperado: dd/mm/aaaa
-  const m = /^([0-3]\d)\/([01]\d)\/(\d{4})$/.exec(input.trim());
+function parseBirthDateBR(value: string): Date | null {
+  const v = value.trim();
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(v);
   if (!m) return null;
   const dd = Number(m[1]);
   const mm = Number(m[2]);
   const yyyy = Number(m[3]);
-  // validação básica
-  if (mm < 1 || mm > 12) return null;
-  if (dd < 1 || dd > 31) return null;
-  // grava como meia-noite UTC (evita problemas de fuso)
   const d = new Date(Date.UTC(yyyy, mm - 1, dd));
-  // garante que não estourou (ex: 31/02)
+  // valida se não virou outra data (ex: 31/02)
   if (d.getUTCFullYear() !== yyyy || d.getUTCMonth() !== mm - 1 || d.getUTCDate() !== dd) return null;
   return d;
 }
 
-/** Helper: ler token dentro de Server Actions */
-async function getAuthToken() {
-  const h = (await headers()) as any;
-  const c = cookies();
-
-  const req = new Request("http://localhost", {
-    headers: {
-      cookie: c.toString(),
-      "x-forwarded-host": (h as any).get?.("x-forwarded-host") ?? "",
-      "x-forwarded-proto": (h as any).get?.("x-forwarded-proto") ?? "",
-    },
-  });
-
-  return getToken({ req: req as any, secret: process.env.NEXTAUTH_SECRET });
-}
-
-/* =========================
-   VALIDADORES
-========================= */
-
-const cpfRegex = /^\d{11}$/; // simples: 11 dígitos (sem máscara)
-const cepRegex = /^\d{8}$/;  // 8 dígitos (sem hífen)
-
-function onlyDigits(v: string) {
-  return v.replace(/\D/g, "");
-}
-
-/* =========================
-   SIGN-UP / SIGN-IN
-========================= */
-
-const signUpSchema = z.object({
+const ownerSignUpSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),
   name: z.string().optional(),
-  // Cadastro público é apenas para OWNER
-  role: z.literal("OWNER"),
-  birthDate: z.string().min(10).max(10), // dd/mm/aaaa
+  birthDate: z.string().min(1), // DD/MM/AAAA
 });
 
-const signInSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(1),
-  role: z.enum(["TENANT", "OWNER"]),
-});
-
-export async function signUpAction(fd: FormData) {
+export async function signUpOwnerAction(fd: FormData) {
   const raw = {
     email: String(fd.get("email") ?? "").trim().toLowerCase(),
     password: String(fd.get("password") ?? ""),
     name: String(fd.get("name") ?? "").trim() || undefined,
-    role: "OWNER" as const,
     birthDate: String(fd.get("birthDate") ?? "").trim(),
   };
 
-  const parsed = signUpSchema.safeParse(raw);
+  const parsed = ownerSignUpSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, error: "Dados inválidos." };
 
-  const { email, password, name, role, birthDate } = parsed.data;
-
-  const birthDateParsed = parseBRDate(birthDate);
-  if (!birthDateParsed) return { ok: false, error: "Data de nascimento inválida (use dd/mm/aaaa)." };
+  const { email, password, name, birthDate } = parsed.data;
+  const birth = parseBirthDateBR(birthDate);
+  if (!birth) return { ok: false, error: "Data de nascimento inválida (DD/MM/AAAA)." };
 
   const exists = await prisma.user.findUnique({ where: { email } });
   if (exists) return { ok: false, error: "E-mail já cadastrado." };
 
   const passwordHash = await bcrypt.hash(password, 10);
-
-  // ✅ trial 3 dias (OWNER)
-  const trialEndsAt = nowPlusDays(3);
+  const trialEndsAt = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
 
   await prisma.user.create({
-    data: { email, name, passwordHash, role, trialEndsAt, birthDate: birthDateParsed },
-  });
-
-  // envia query param para mostrar "Usuário criado com sucesso" na tela de login
-  return { ok: true, redirectTo: `/auth/sign-in?created=1` };
-}
-
-export async function signInAction(fd: FormData) {
-  const raw = {
-    email: String(fd.get("email") ?? "").trim().toLowerCase(),
-    password: String(fd.get("password") ?? ""),
-    role: String(fd.get("role") ?? "TENANT") as "TENANT" | "OWNER",
-  };
-
-  const parsed = signInSchema.safeParse(raw);
-  if (!parsed.success) return { ok: false, error: "Dados inválidos." };
-
-  const { email, password, role } = parsed.data;
-
-  const user = await prisma.user.findUnique({ where: { email } });
-  if (!user) return { ok: false, error: "E-mail ou senha inválidos." };
-
-  const ok = await bcrypt.compare(password, user.passwordHash);
-  if (!ok) return { ok: false, error: "E-mail ou senha inválidos." };
-
-  if (user.role !== role) {
-    return { ok: false, error: `Sua conta é do tipo ${user.role}.` };
-  }
-
-  return { ok: true, redirectTo: user.role === "OWNER" ? "/owner" : "/tenant" };
-}
-
-/* =========================
-   OWNER -> CREATE TENANT
-========================= */
-
-const createTenantSchema = z.object({
-  fullName: z.string().min(3, "Nome completo obrigatório"),
-  email: z.string().email("Email inválido"),
-  cpf: z.string().transform(onlyDigits).refine((v) => cpfRegex.test(v), "CPF deve ter 11 dígitos"),
-  rg: z.string().min(3, "RG obrigatório"),
-  address: z.string().min(5, "Endereço obrigatório"),
-  cep: z.string().transform(onlyDigits).refine((v) => cepRegex.test(v), "CEP deve ter 8 dígitos"),
-  tempPassword: z.string().min(6, "Senha inicial mínimo 6"),
-});
-
-export async function createTenantAction(fd: FormData) {
-  const token = await getAuthToken();
-
-  if (!token) return { ok: false, error: "Não autenticado." };
-  if (token.role !== "OWNER") return { ok: false, error: "Apenas OWNER pode criar inquilino." };
-
-  const raw = {
-    fullName: String(fd.get("fullName") ?? "").trim(),
-    email: String(fd.get("email") ?? "").trim().toLowerCase(),
-    cpf: String(fd.get("cpf") ?? ""),
-    rg: String(fd.get("rg") ?? "").trim(),
-    address: String(fd.get("address") ?? "").trim(),
-    cep: String(fd.get("cep") ?? ""),
-    tempPassword: String(fd.get("tempPassword") ?? ""),
-  };
-
-  const parsed = createTenantSchema.safeParse(raw);
-  if (!parsed.success) {
-    const msg = parsed.error.issues?.[0]?.message ?? "Dados inválidos.";
-    return { ok: false, error: msg };
-  }
-
-  const { fullName, email, cpf, rg, address, cep, tempPassword } = parsed.data;
-
-  // não deixa email repetido
-  const emailExists = await prisma.user.findUnique({ where: { email } });
-  if (emailExists) return { ok: false, error: "Já existe um usuário com esse e-mail." };
-
-  // não deixa CPF repetido
-  const cpfExists = await prisma.tenantProfile.findUnique({ where: { cpf } }).catch(() => null);
-  if (cpfExists) return { ok: false, error: "Já existe inquilino com esse CPF." };
-
-  const passwordHash = await bcrypt.hash(tempPassword, 10);
-
-  await prisma.$transaction(async (tx) => {
-    const user = await tx.user.create({
-      data: {
-        email,
-        name: fullName,
-        passwordHash,
-        role: "TENANT",
-        ownerPaid: false,
-        trialEndsAt: null,
-      },
-    });
-
-    await tx.tenantProfile.create({
-      data: {
-        userId: user.id,
-        ownerId: String(token.id),
-        fullName,
-        cpf,
-        rg,
-        address,
-        cep,
-      },
-    });
+    data: {
+      email,
+      name,
+      passwordHash,
+      role: "OWNER",
+      birthDate: birth,
+      trialEndsAt,
+    },
   });
 
   return { ok: true };
 }
 
-/* =========================
-   TENANT -> CHANGE PASSWORD
-========================= */
-
-const changePasswordSchema = z.object({
-  currentPassword: z.string().min(1, "Senha atual obrigatória"),
-  newPassword: z.string().min(6, "Nova senha mínimo 6"),
+const ownerResetSchema = z.object({
+  email: z.string().email(),
+  birthDate: z.string().min(1),
+  newPassword: z.string().min(6),
 });
 
-export async function tenantChangePasswordAction(fd: FormData) {
-  const token = await getAuthToken();
-
-  if (!token) return { ok: false, error: "Não autenticado." };
-  if (token.role !== "TENANT") return { ok: false, error: "Apenas TENANT pode trocar senha aqui." };
-
+export async function resetOwnerPasswordAction(fd: FormData) {
   const raw = {
-    currentPassword: String(fd.get("currentPassword") ?? ""),
+    email: String(fd.get("email") ?? "").trim().toLowerCase(),
+    birthDate: String(fd.get("birthDate") ?? "").trim(),
     newPassword: String(fd.get("newPassword") ?? ""),
   };
 
-  const parsed = changePasswordSchema.safeParse(raw);
-  if (!parsed.success) {
-    const msg = parsed.error.issues?.[0]?.message ?? "Dados inválidos.";
-    return { ok: false, error: msg };
+  const parsed = ownerResetSchema.safeParse(raw);
+  if (!parsed.success) return { ok: false, error: "Dados inválidos." };
+
+  const birth = parseBirthDateBR(parsed.data.birthDate);
+  if (!birth) return { ok: false, error: "Data de nascimento inválida (DD/MM/AAAA)." };
+
+  const user = await prisma.user.findUnique({ where: { email: parsed.data.email } });
+  if (!user || user.role !== "OWNER" || !user.birthDate) {
+    return { ok: false, error: "Não foi possível validar os dados." };
   }
 
-  const { currentPassword, newPassword } = parsed.data;
+  const same =
+    user.birthDate.getUTCFullYear() === birth.getUTCFullYear() &&
+    user.birthDate.getUTCMonth() === birth.getUTCMonth() &&
+    user.birthDate.getUTCDate() === birth.getUTCDate();
 
-  const user = await prisma.user.findUnique({ where: { id: String(token.id) } });
-  if (!user) return { ok: false, error: "Usuário não encontrado." };
+  if (!same) return { ok: false, error: "Data de nascimento não confere." };
 
-  const ok = await bcrypt.compare(currentPassword, user.passwordHash);
-  if (!ok) return { ok: false, error: "Senha atual incorreta." };
-
-  const passwordHash = await bcrypt.hash(newPassword, 10);
+  const passwordHash = await bcrypt.hash(parsed.data.newPassword, 10);
   await prisma.user.update({ where: { id: user.id }, data: { passwordHash } });
 
   return { ok: true };

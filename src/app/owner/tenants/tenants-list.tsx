@@ -2,80 +2,66 @@
 
 import { useEffect, useState } from "react";
 
-type Tenant = {
+type TenantItem = {
   id: string;
+  email: string;
   fullName: string;
   cpf: string;
   rg: string;
   address: string;
   cep: string;
   createdAt: string;
-  user: { email: string; id: string };
 };
 
-export default function TenantsList() {
+export function TenantsList() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
-  const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [items, setItems] = useState<TenantItem[]>([]);
 
   async function load() {
     setLoading(true);
     setErr(null);
-    try {
-      const r = await fetch("/api/owner/tenants/list", { cache: "no-store" });
-      const data = await r.json().catch(() => ({}));
-      if (!r.ok) {
-        setErr(data?.error || `Erro (${r.status})`);
-        setTenants([]);
-        return;
-      }
-      setTenants(data.tenants || []);
-    } catch (e: any) {
-      setErr(e?.message || "Erro inesperado");
-      setTenants([]);
-    } finally {
-      setLoading(false);
+    const res = await fetch("/api/owner/tenants/list");
+    const data = await res.json().catch(() => ({}));
+    setLoading(false);
+
+    if (!res.ok) {
+      setErr(data?.error || "Erro ao carregar.");
+      return;
     }
+    setItems(data?.tenants || []);
   }
 
   useEffect(() => {
     load();
-    const fn = () => load();
-    window.addEventListener("tenants:refresh", fn);
-    return () => window.removeEventListener("tenants:refresh", fn);
+    const onRefresh = () => load();
+    window.addEventListener("tenants:refresh", onRefresh);
+    return () => window.removeEventListener("tenants:refresh", onRefresh);
   }, []);
 
   return (
-    <section className="border rounded-xl p-4">
-      <div className="flex items-center justify-between gap-4">
-        <h2 className="font-semibold">Lista de inquilinos</h2>
-        <button onClick={load} className="text-sm underline">
-          Atualizar
-        </button>
-      </div>
+    <section style={{ border: "1px solid #ddd", borderRadius: 12, padding: 16 }}>
+      <h2 style={{ fontSize: 18, fontWeight: 700 }}>Lista</h2>
 
-      {loading ? <p className="text-sm text-gray-600 mt-3">Carregando...</p> : null}
-      {err ? <p className="text-sm text-red-600 mt-3">{err}</p> : null}
+      {loading ? <p style={{ opacity: 0.7, marginTop: 8 }}>Carregando...</p> : null}
+      {err ? <p style={{ color: "crimson", marginTop: 8 }}>{err}</p> : null}
 
-      {!loading && !err && tenants.length === 0 ? (
-        <p className="text-sm text-gray-600 mt-3">Nenhum inquilino cadastrado ainda.</p>
+      {!loading && !err && items.length === 0 ? (
+        <p style={{ opacity: 0.7, marginTop: 8 }}>Nenhum inquilino cadastrado.</p>
       ) : null}
 
-      {!loading && !err && tenants.length > 0 ? (
-        <div className="mt-4 grid gap-3">
-          {tenants.map((t) => (
-            <div key={t.id} className="rounded border p-3 text-sm">
-              <div className="font-semibold">{t.fullName}</div>
-              <div className="text-gray-700">{t.user.email}</div>
-              <div className="text-gray-600 mt-1">
-                CPF: {t.cpf} • RG: {t.rg}
-              </div>
-              <div className="text-gray-600">CEP: {t.cep}</div>
-              <div className="text-gray-600">{t.address}</div>
+      <div style={{ display: "grid", gap: 10, marginTop: 12 }}>
+        {items.map((t) => (
+          <div key={t.id} style={{ border: "1px solid #eee", borderRadius: 10, padding: 12 }}>
+            <div style={{ fontWeight: 700 }}>{t.fullName}</div>
+            <div style={{ fontSize: 14, opacity: 0.75 }}>{t.email}</div>
+            <div style={{ fontSize: 13, opacity: 0.75, marginTop: 6 }}>
+              CPF: {t.cpf} • RG: {t.rg} • CEP: {t.cep}
             </div>
-          ))}
-        </div>
-      ) : null}
+            <div style={{ fontSize: 13, opacity: 0.75 }}>Endereço: {t.address}</div>
+          </div>
+        ))}
+      </div>
     </section>
   );
 }

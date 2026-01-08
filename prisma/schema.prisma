@@ -17,38 +17,37 @@ model User {
   email        String   @unique
   name         String?
   passwordHash String
-
   role         Role     @default(TENANT)
 
-  // Premium
+  // Para recuperar senha do OWNER (DD/MM/AAAA)
+  birthDate    DateTime?
+
+  // Premium / trial (somente OWNER)
   ownerPaid    Boolean  @default(false)
   trialEndsAt  DateTime?
-
-  // ✅ Segurança extra (somente OWNER) – usada para reset de senha
-  birthDate    DateTime?
 
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  // ✅ Se esse usuário for TENANT, terá um perfil
+  // Se esse usuário for TENANT, terá um perfil
   tenantProfile TenantProfile? @relation("TenantUser")
 
-  // ✅ Se esse usuário for OWNER, poderá ter vários tenants vinculados
+  // Se esse usuário for OWNER, poderá ter vários tenants vinculados
   ownedTenants  TenantProfile[] @relation("OwnerTenants")
 }
 
 model TenantProfile {
   id        String   @id @default(cuid())
 
-  // 🔗 vínculo com TENANT (User)
+  // vínculo com TENANT (User)
   userId    String   @unique
   user      User     @relation("TenantUser", fields: [userId], references: [id], onDelete: Cascade)
 
-  // 🔗 vínculo com OWNER (User) que criou o TENANT
+  // vínculo com OWNER (User) que criou o TENANT
   ownerId   String
   owner     User     @relation("OwnerTenants", fields: [ownerId], references: [id], onDelete: Cascade)
 
-  // 🧾 dados do inquilino
+  // dados do inquilino
   fullName  String
   cpf       String   @unique
   rg        String

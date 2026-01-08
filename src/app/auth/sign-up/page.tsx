@@ -1,59 +1,61 @@
-import { AuthShell } from "../_ui";
-import { signUpAction } from "../actions";
-import { redirect } from "next/navigation";
+"use client";
+
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 
 export default function Page() {
-  // ✅ Cadastro público: somente OWNER
-  const role = "OWNER" as const;
+  const router = useRouter();
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
-  async function action(fd: FormData) {
-    "use server";
-    fd.set("role", role);
-    const res = await signUpAction(fd);
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setLoading(true);
+    setErr(null);
 
-    if (res?.ok && res?.redirectTo) redirect(res.redirectTo);
-    return;
+    const fd = new FormData(e.currentTarget);
+    const payload = {
+      name: String(fd.get("name") ?? ""),
+      email: String(fd.get("email") ?? ""),
+      birthDate: String(fd.get("birthDate") ?? ""),
+      password: String(fd.get("password") ?? ""),
+    };
+
+    const res = await fetch("/api/auth/signup-owner", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await res.json().catch(() => ({}));
+    setLoading(false);
+
+    if (!res.ok) {
+      setErr(data?.error || "Erro ao criar conta.");
+      return;
+    }
+
+    router.push("/auth/sign-in?created=1");
   }
 
   return (
-    <AuthShell title="Criar conta" subtitle="Cadastre-se para continuar.">
-      <form action={action} className="grid gap-3">
-        <input
-          name="name"
-          placeholder="Nome (opcional)"
-          className="border rounded p-2"
-        />
-        <input
-          name="email"
-          type="email"
-          placeholder="Email"
-          required
-          className="border rounded p-2"
-        />
-        <input
-          name="password"
-          type="password"
-          placeholder="Senha"
-          minLength={6}
-          required
-          className="border rounded p-2"
-        />
+    <main style={{ maxWidth: 420, margin: "40px auto", padding: 16 }}>
+      <h1 style={{ fontSize: 24, fontWeight: 700 }}>Criar conta</h1>
+      <p style={{ opacity: 0.7, marginTop: 8 }}>Crie sua conta para acessar o painel.</p>
 
-        <input
-          name="birthDate"
-          placeholder="Data de nascimento (dd/mm/aaaa)"
-          required
-          className="border rounded p-2"
-        />
-
-        <button type="submit" className="rounded bg-black text-white p-2">
-          Criar conta
-        </button>
-
-        <a className="text-sm underline" href={`/auth/sign-in`}>
-          Entrar
-        </a>
+      <form onSubmit={onSubmit} style={{ display: "grid", gap: 12, marginTop: 16 }}>
+        <input name="name" placeholder="Nome (opcional)" />
+        <input name="email" type="email" placeholder="Email" required />
+        <input name="birthDate" placeholder="Data de nascimento (DD/MM/AAAA)" required />
+        <input name="password" type="password" placeholder="Senha" minLength={6} required />
+        <button type="submit" disabled={loading}>{loading ? "Criando..." : "Criar conta"}</button>
+        {err ? <p style={{ color: "crimson" }}>{err}</p> : null}
       </form>
-    </AuthShell>
+
+      <p style={{ marginTop: 16, fontSize: 14, opacity: 0.7 }}>
+        Já tem conta? <Link href="/auth/sign-in">Entrar</Link>
+      </p>
+    </main>
   );
 }

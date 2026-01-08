@@ -1,20 +1,16 @@
-import { Logo } from "@/components/Logo";
+import Link from "next/link";
 
-export default function Page() {
+export default function HomePage() {
   return (
-    <main className="mx-auto max-w-md px-5 py-10">
-      <div className="flex items-start justify-between gap-6">
-        <Logo />
-        <div className="text-xs text-muted mt-2"></div>
+    <main style={{ maxWidth: 420, margin: "40px auto", padding: 16 }}>
+      <h1 style={{ fontSize: 24, fontWeight: 800 }}>Aluguel</h1>
+      <p style={{ opacity: 0.7, marginTop: 8 }}>Entre para continuar.</p>
+
+      <div style={{ display: "grid", gap: 10, marginTop: 16 }}>
+        <Link href="/auth/sign-in">Ir para login</Link>
+        <Link href="/auth/sign-up">Criar conta</Link>
+        <Link href="/auth/forgot-password">Esqueci minha senha</Link>
       </div>
-
-      <section className="mt-10">
-        <h1 className="text-3xl sm:text-4xl font-black tracking-tight">Login</h1>
-        <p className="text-muted mt-3 leading-relaxed">
-          Entre com seu e-mail e senha. O proprietário cria o acesso do inquilino e pode redefinir a senha do inquilino quando necessário.
-        </p>
-
-      </section>
     </main>
   );
 }

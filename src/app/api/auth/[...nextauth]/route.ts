@@ -1,39 +1,24 @@
 import NextAuth from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
-import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
+import { prisma } from "@/lib/prisma";
 
 const handler = NextAuth({
   session: { strategy: "jwt" },
-
   providers: [
     CredentialsProvider({
       name: "Credentials",
       credentials: {
-        // Usamos o campo "email" como identificador (Email ou CPF)
-        email: { label: "Email ou CPF", type: "text" },
-        password: { label: "Password", type: "password" },
+        identifier: { label: "Email", type: "text" },
+        password: { label: "Senha", type: "password" },
       },
       async authorize(credentials) {
-        const identifierRaw = String(credentials?.email ?? "").trim().toLowerCase();
+        const identifier = String(credentials?.identifier ?? "").trim().toLowerCase();
         const password = String(credentials?.password ?? "");
 
-        if (!identifierRaw || !password) return null;
+        if (!identifier || !password) return null;
 
-        // Se não tiver "@", tratamos como CPF (somente números)
-        const identifier = identifierRaw.includes("@")
-          ? identifierRaw
-          : identifierRaw.replace(/\D/g, "");
-
-        const user = identifierRaw.includes("@")
-          ? await prisma.user.findUnique({ where: { email: identifier } })
-          : await prisma.user.findFirst({
-              where: {
-                tenantProfile: {
-                  cpf: identifier,
-                },
-              },
-            });
+        const user = await prisma.user.findUnique({ where: { email: identifier } });
         if (!user) return null;
 
         const ok = await bcrypt.compare(password, user.passwordHash);
@@ -50,18 +35,16 @@ const handler = NextAuth({
       },
     }),
   ],
-
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
         token.id = (user as any).id;
         token.role = (user as any).role;
         token.ownerPaid = (user as any).ownerPaid;
-        token.trialEndsAt = (user as any).trialEndsAt; // string ISO | undefined
+        token.trialEndsAt = (user as any).trialEndsAt;
       }
       return token;
     },
-
     async session({ session, token }) {
       (session as any).user.id = token.id;
       (session as any).user.role = token.role;
@@ -70,7 +53,6 @@ const handler = NextAuth({
       return session;
     },
   },
-
   pages: { signIn: "/auth/sign-in" },
   secret: process.env.NEXTAUTH_SECRET,
 });
