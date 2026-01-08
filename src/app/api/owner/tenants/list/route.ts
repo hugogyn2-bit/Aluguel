@@ -1,3 +1,4 @@
+// src/app/api/owner/tenants/list/route.ts
 import { NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/prisma";
@@ -11,20 +12,24 @@ export async function GET(req: Request) {
     if (!token) return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     if (token.role !== "OWNER") return NextResponse.json({ error: "Somente OWNER" }, { status: 403 });
 
-    const ownerId = String(token.id);
+    const ownerId = String((token as any).id);
 
-    const tenants = await prisma.user.findMany({
-      where: { role: "TENANT", ownerId },
+    const tenants = await prisma.tenantProfile.findMany({
+      where: { ownerId },
       orderBy: { createdAt: "desc" },
       select: {
         id: true,
-        email: true,
-        name: true,
+        fullName: true,
+        cpf: true,
+        rg: true,
+        address: true,
+        cep: true,
         createdAt: true,
+        user: { select: { email: true, id: true } },
       },
     });
 
-    return NextResponse.json({ ok: true, tenants });
+    return NextResponse.json({ tenants });
   } catch (e) {
     console.error(e);
     return NextResponse.json({ error: "Erro interno" }, { status: 500 });
