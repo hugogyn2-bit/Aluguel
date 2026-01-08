@@ -3,18 +3,10 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-<<<<<<< HEAD
     "dev": "node ./node_modules/next/dist/bin/next dev --turbo",
     "build": "NEXT_TELEMETRY_DISABLED=1 NODE_OPTIONS=--max-old-space-size=8192 node ./node_modules/prisma/build/index.js generate && NEXT_TELEMETRY_DISABLED=1 NODE_OPTIONS=--max-old-space-size=8192 node ./node_modules/next/dist/bin/next build",
     "start": "node ./node_modules/next/dist/bin/next start",
     "lint": "node ./node_modules/eslint/bin/eslint.js .",
-=======
-    "dev": "node ./node_modules/next/dist/bin/next dev",
-    "build": "node ./node_modules/prisma/build/index.js generate && node ./node_modules/next/dist/bin/next build",
-    "start": "node ./node_modules/next/dist/bin/next start",
-    "lint": "node ./node_modules/next/dist/bin/next lint",
-
->>>>>>> 7078eefa628d91fff5e9f274ae883073c437c56c
     "prisma:generate": "node ./node_modules/prisma/build/index.js generate",
     "prisma:migrate": "node ./node_modules/prisma/build/index.js migrate deploy",
     "prisma:studio": "node ./node_modules/prisma/build/index.js studio"

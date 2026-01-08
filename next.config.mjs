@@ -1,5 +1,4 @@
 /** @type {import('next').NextConfig} */
-<<<<<<< HEAD
 const allowed = new Set(["*.vercel.app"]);
 
 const addHost = (value) => {
@@ -22,19 +21,6 @@ const nextConfig = {
       allowedOrigins: Array.from(allowed),
     },
   },
-=======
-const nextConfig = {
-  experimental: {
-    serverActions: {
-      allowedOrigins: [
-        "*.vercel.app"
-      ]
-    }
-  },
-  eslint: {
-    ignoreDuringBuilds: true
-  }
->>>>>>> 7078eefa628d91fff5e9f274ae883073c437c56c
 };
 
 export default nextConfig;
