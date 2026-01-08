@@ -29,7 +29,7 @@ function parseBRDate(input: string): Date | null {
 
 /** Helper: ler token dentro de Server Actions */
 async function getAuthToken() {
-  const h = headers();
+  const h = await headers();
   const c = cookies();
 
   const req = new Request("http://localhost", {
