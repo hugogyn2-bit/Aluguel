@@ -29,8 +29,10 @@ function parseBRDate(input: string): Date | null {
 
 /** Helper: ler token dentro de Server Actions */
 async function getAuthToken() {
-  const h = headers();
-  const c = cookies();
+  // Next 16+ pode tipar headers()/cookies() como async em alguns ambientes,
+  // então usamos await para compatibilidade.
+  const h = await headers();
+  const c = await cookies();
 
   const req = new Request("http://localhost", {
     headers: {
