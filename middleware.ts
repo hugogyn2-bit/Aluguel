@@ -12,15 +12,11 @@ export async function middleware(req: NextRequest) {
 
   // ✅ Compat rotas antigas
   if (pathname === "/login") {
-    const role = (searchParams.get("role") || "TENANT").toUpperCase();
-    const r = role === "OWNER" ? "OWNER" : "TENANT";
-    return redirectTo(`/auth/sign-in?role=${r}`, req);
+    return redirectTo(`/auth/sign-in`, req);
   }
 
   if (pathname === "/register") {
-    const role = (searchParams.get("role") || "TENANT").toUpperCase();
-    const r = role === "OWNER" ? "OWNER" : "TENANT";
-    return redirectTo(`/auth/sign-up?role=${r}`, req);
+    return redirectTo(`/auth/sign-up`, req);
   }
 
   // ✅ Token (JWT)
@@ -35,49 +31,27 @@ export async function middleware(req: NextRequest) {
 
   const ownerPaid = !!token?.ownerPaid;
 
-  // ✅ Auth pages: garante role param (UX)
-  if (pathname === "/auth/sign-in") {
-    const r = searchParams.get("role");
-    if (!r) {
-      const u = new URL(req.url);
-      u.searchParams.set("role", "TENANT");
-      return NextResponse.redirect(u);
-    }
-    return NextResponse.next();
-  }
-
-  // Cadastro público é somente OWNER
-  if (pathname === "/auth/sign-up") {
-    const r = searchParams.get("role");
-    if (!r) {
-      const u = new URL(req.url);
-      u.searchParams.set("role", "OWNER");
-      return NextResponse.redirect(u);
-    }
-    if (r !== "OWNER") {
-      return redirectTo(`/auth/sign-in?role=TENANT`, req);
-    }
-    return NextResponse.next();
-  }
+  // ✅ Auth pages sempre liberadas
+  if (pathname.startsWith("/auth")) return NextResponse.next();
 
   // ✅ Paywall: requer OWNER logado
   // (IMPORTANTE: não pode redirecionar /paywall pra /paywall, senão loop)
   if (pathname.startsWith("/paywall")) {
-    if (!isAuth) return redirectTo(`/auth/sign-in?role=OWNER`, req);
+    if (!isAuth) return redirectTo(`/auth/sign-in`, req);
     if (role !== "OWNER") return redirectTo(`/tenant`, req);
     return NextResponse.next();
   }
 
   // ✅ Protect tenant
   if (pathname.startsWith("/tenant")) {
-    if (!isAuth) return redirectTo(`/auth/sign-in?role=TENANT`, req);
+    if (!isAuth) return redirectTo(`/auth/sign-in`, req);
     if (role !== "TENANT") return redirectTo(`/owner`, req);
     return NextResponse.next();
   }
 
   // ✅ Protect owner (inclui /owner/tenants)
   if (pathname.startsWith("/owner")) {
-    if (!isAuth) return redirectTo(`/auth/sign-in?role=OWNER`, req);
+    if (!isAuth) return redirectTo(`/auth/sign-in`, req);
     if (role !== "OWNER") return redirectTo(`/tenant`, req);
 
     // ✅ dono só passa se pagou OU está no trial

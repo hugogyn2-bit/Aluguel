@@ -102,7 +102,8 @@ export async function signUpAction(fd: FormData) {
     data: { email, name, passwordHash, role, trialEndsAt, birthDate: birthDateParsed },
   });
 
-  return { ok: true, redirectTo: `/auth/sign-in?role=${role}` };
+  // envia query param para mostrar "Usuário criado com sucesso" na tela de login
+  return { ok: true, redirectTo: `/auth/sign-in?created=1` };
 }
 
 export async function signInAction(fd: FormData) {
