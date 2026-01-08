@@ -13,14 +13,25 @@ export async function GET(req: Request) {
 
     const ownerId = String(token.id);
 
-    const tenants = await prisma.user.findMany({
-      where: { role: "TENANT", ownerId },
+    // ✅ Tenants pertencem ao OWNER via TenantProfile.ownerId
+    const tenants = await prisma.tenantProfile.findMany({
+      where: { ownerId },
       orderBy: { createdAt: "desc" },
       select: {
         id: true,
-        email: true,
-        name: true,
+        fullName: true,
+        cpf: true,
+        rg: true,
+        address: true,
+        cep: true,
         createdAt: true,
+        user: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+          },
+        },
       },
     });
 
