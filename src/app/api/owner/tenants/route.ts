@@ -8,16 +8,11 @@ export async function GET(req: Request) {
   try {
     const token = await getToken({ req: req as any, secret: process.env.NEXTAUTH_SECRET });
 
-    if (!token) {
-      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
-    }
-    if (token.role !== "OWNER") {
-      return NextResponse.json({ error: "Somente OWNER" }, { status: 403 });
-    }
+    if (!token) return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+    if (token.role !== "OWNER") return NextResponse.json({ error: "Somente OWNER" }, { status: 403 });
 
-    const ownerId = String(token.id);
+    const ownerId = String((token as any).id);
 
-    // ✅ Lista os inquilinos criados por esse OWNER
     const tenants = await prisma.tenantProfile.findMany({
       where: { ownerId },
       orderBy: { createdAt: "desc" },
@@ -30,7 +25,8 @@ export async function GET(req: Request) {
         cep: true,
         createdAt: true,
         user: {
-          select: {i{i           id: true,
+          select: {
+            id: true,
             email: true,
             name: true,
           },

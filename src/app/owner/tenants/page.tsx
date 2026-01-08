@@ -1,18 +1,16 @@
 import TenantsCreateForm from "./tenants-create-form";
-import TenantsList from "./tenants-list";
 
 export default function Page() {
   return (
-    <main className="mx-auto max-w-3xl p-6 grid gap-6">
-      <header>
-        <h1 className="text-2xl font-bold">Inquilinos</h1>
-        <p className="text-sm text-gray-600 mt-1">
-          Crie acessos de inquilino e gerencie os dados básicos.
-        </p>
-      </header>
+    <main style={{ maxWidth: 760, margin: "40px auto", padding: 16 }}>
+      <h1 style={{ fontSize: 26, fontWeight: 800 }}>Inquilinos</h1>
+      <p style={{ opacity: 0.7, marginTop: 8 }}>
+        Aqui o proprietário cria o acesso do inquilino (conta separada).
+      </p>
 
-      <TenantsCreateForm />
-      <TenantsList />
+      <div style={{ marginTop: 18 }}>
+        <TenantsCreateForm />
+      </div>
     </main>
   );
 }
