@@ -36,12 +36,26 @@ export async function middleware(req: NextRequest) {
   const ownerPaid = !!token?.ownerPaid;
 
   // ✅ Auth pages: garante role param (UX)
-  if (pathname === "/auth/sign-in" || pathname === "/auth/sign-up") {
+  if (pathname === "/auth/sign-in") {
     const r = searchParams.get("role");
     if (!r) {
       const u = new URL(req.url);
       u.searchParams.set("role", "TENANT");
       return NextResponse.redirect(u);
+    }
+    return NextResponse.next();
+  }
+
+  // Cadastro público é somente OWNER
+  if (pathname === "/auth/sign-up") {
+    const r = searchParams.get("role");
+    if (!r) {
+      const u = new URL(req.url);
+      u.searchParams.set("role", "OWNER");
+      return NextResponse.redirect(u);
+    }
+    if (r !== "OWNER") {
+      return redirectTo(`/auth/sign-in?role=TENANT`, req);
     }
     return NextResponse.next();
   }

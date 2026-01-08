@@ -45,7 +45,8 @@ const signUpSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),
   name: z.string().optional(),
-  role: z.enum(["TENANT", "OWNER"]),
+  // Cadastro público é apenas para OWNER
+  role: z.literal("OWNER"),
 });
 
 const signInSchema = z.object({
@@ -59,7 +60,7 @@ export async function signUpAction(fd: FormData) {
     email: String(fd.get("email") ?? "").trim().toLowerCase(),
     password: String(fd.get("password") ?? ""),
     name: String(fd.get("name") ?? "").trim() || undefined,
-    role: String(fd.get("role") ?? "TENANT") as "TENANT" | "OWNER",
+    role: "OWNER" as const,
   };
 
   const parsed = signUpSchema.safeParse(raw);
@@ -72,8 +73,8 @@ export async function signUpAction(fd: FormData) {
 
   const passwordHash = await bcrypt.hash(password, 10);
 
-  // ✅ trial 3 dias só para OWNER
-  const trialEndsAt = role === "OWNER" ? nowPlusDays(3) : null;
+  // ✅ trial 3 dias (OWNER)
+  const trialEndsAt = nowPlusDays(3);
 
   await prisma.user.create({
     data: { email, name, passwordHash, role, trialEndsAt },

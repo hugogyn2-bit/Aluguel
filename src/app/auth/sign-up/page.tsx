@@ -8,7 +8,12 @@ export default async function Page({
   searchParams: Promise<{ role?: string }>;
 }) {
   const sp = await searchParams;
-  const role = sp?.role === "OWNER" ? "OWNER" : "TENANT";
+  // Cadastro público: somente OWNER
+  const requestedRole = sp?.role;
+  if (requestedRole && requestedRole !== "OWNER") {
+    redirect("/auth/sign-in?role=TENANT");
+  }
+  const role = "OWNER" as const;
 
   async function action(fd: FormData) {
     "use server";
@@ -47,7 +52,7 @@ export default async function Page({
           Criar conta
         </button>
 
-        <a className="text-sm underline" href={`/auth/sign-in?role=${role}`}>
+        <a className="text-sm underline" href={`/auth/sign-in?role=OWNER`}>
           Entrar
         </a>
       </form>
