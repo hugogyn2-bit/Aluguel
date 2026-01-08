@@ -21,7 +21,7 @@ export function SignInForm() {
     setErr(null);
 
     const fd = new FormData(e.currentTarget);
-    const email = String(fd.get("email") ?? "").trim();
+    const email = String(fd.get("email") ?? "").trim(); // Email ou CPF
     const password = String(fd.get("password") ?? "");
 
     const res = await signIn("credentials", {
@@ -37,8 +37,18 @@ export function SignInForm() {
       return;
     }
 
-    // deixa o middleware decidir a rota final
-    router.push("/dashboard");
+    // Descobre o role pela sessão e redireciona
+    try {
+      const session = await fetch("/api/auth/session", { cache: "no-store" })
+        .then((r) => r.json())
+        .catch(() => null);
+
+      const role = session?.user?.role as "OWNER" | "TENANT" | undefined;
+      router.push(role === "OWNER" ? "/owner" : "/tenant");
+    } catch {
+      // fallback
+      router.push("/");
+    }
   }
 
   return (
@@ -52,7 +62,7 @@ export function SignInForm() {
       ) : null}
 
       <form onSubmit={onSubmit} style={{ display: "grid", gap: 12 }}>
-        <input name="email" type="email" placeholder="Email" required />
+        <input name="email" type="text" placeholder="Email ou CPF" required />
         <input name="password" type="password" placeholder="Senha" required />
 
         <button type="submit" disabled={loading}>

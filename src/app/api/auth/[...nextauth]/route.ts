@@ -10,16 +10,30 @@ const handler = NextAuth({
     CredentialsProvider({
       name: "Credentials",
       credentials: {
-        email: { label: "Email", type: "email" },
+        // Usamos o campo "email" como identificador (Email ou CPF)
+        email: { label: "Email ou CPF", type: "text" },
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        const email = String(credentials?.email ?? "").trim().toLowerCase();
+        const identifierRaw = String(credentials?.email ?? "").trim().toLowerCase();
         const password = String(credentials?.password ?? "");
 
-        if (!email || !password) return null;
+        if (!identifierRaw || !password) return null;
 
-        const user = await prisma.user.findUnique({ where: { email } });
+        // Se não tiver "@", tratamos como CPF (somente números)
+        const identifier = identifierRaw.includes("@")
+          ? identifierRaw
+          : identifierRaw.replace(/\D/g, "");
+
+        const user = identifierRaw.includes("@")
+          ? await prisma.user.findUnique({ where: { email: identifier } })
+          : await prisma.user.findFirst({
+              where: {
+                tenantProfile: {
+                  cpf: identifier,
+                },
+              },
+            });
         if (!user) return null;
 
         const ok = await bcrypt.compare(password, user.passwordHash);
