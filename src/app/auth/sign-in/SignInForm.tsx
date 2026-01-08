@@ -2,16 +2,18 @@
 
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 export function SignInForm() {
   const router = useRouter();
   const sp = useSearchParams();
 
-  const created = useMemo(() => sp.get("created") === "1", [sp]);
-
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  // mensagem vinda do cadastro / reset
+  const success = sp.get("created") === "1";
+  const resetOk = sp.get("reset") === "1";
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -35,24 +37,18 @@ export function SignInForm() {
       return;
     }
 
-    // decide o destino no server (tenant/owner)
-    router.push("/api/post-login");
+    // deixa o middleware decidir a rota final
+    router.push("/dashboard");
   }
 
   return (
     <div style={{ display: "grid", gap: 10, marginTop: 16 }}>
-      {created ? (
-        <div
-          style={{
-            padding: 10,
-            borderRadius: 10,
-            background: "rgba(16, 185, 129, 0.12)",
-            border: "1px solid rgba(16, 185, 129, 0.25)",
-            fontSize: 14,
-          }}
-        >
-          Usuário criado com sucesso.
-        </div>
+      {success ? (
+        <p style={{ color: "green", fontSize: 14 }}>Usuário criado com sucesso.</p>
+      ) : null}
+
+      {resetOk ? (
+        <p style={{ color: "green", fontSize: 14 }}>Senha redefinida com sucesso. Faça login.</p>
       ) : null}
 
       <form onSubmit={onSubmit} style={{ display: "grid", gap: 12 }}>
@@ -63,14 +59,8 @@ export function SignInForm() {
           {loading ? "Entrando..." : "Entrar"}
         </button>
 
-        {err ? <p style={{ color: "crimson", margin: 0 }}>{err}</p> : null}
+        {err ? <p style={{ color: "crimson" }}>{err}</p> : null}
       </form>
-
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", fontSize: 14, opacity: 0.85 }}>
-        <a href="/auth/sign-up">Criar conta (proprietário)</a>
-        <span>•</span>
-        <a href="/auth/forgot-password">Esqueci minha senha (proprietário)</a>
-      </div>
     </div>
   );
 }

@@ -1,4 +1,3 @@
-// src/app/api/auth/[...nextauth]/route.ts
 import NextAuth from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { prisma } from "@/lib/prisma";
@@ -26,9 +25,6 @@ const handler = NextAuth({
         const ok = await bcrypt.compare(password, user.passwordHash);
         if (!ok) return null;
 
-	        // Login único: valida apenas e-mail/senha.
-	        // A rota de destino (OWNER/TENANT) é definida depois via /api/post-login
-
         return {
           id: user.id,
           email: user.email,
@@ -47,7 +43,7 @@ const handler = NextAuth({
         token.id = (user as any).id;
         token.role = (user as any).role;
         token.ownerPaid = (user as any).ownerPaid;
-        token.trialEndsAt = (user as any).trialEndsAt; // ISO string | undefined
+        token.trialEndsAt = (user as any).trialEndsAt; // string ISO | undefined
       }
       return token;
     },

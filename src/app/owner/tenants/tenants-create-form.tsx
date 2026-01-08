@@ -55,7 +55,7 @@ export default function TenantsCreateForm() {
       <form onSubmit={onSubmit} style={{ display: "grid", gap: 10, marginTop: 12 }}>
         <input name="email" type="email" placeholder="Email do inquilino" required />
         <input name="fullName" placeholder="Nome completo" required />
-        <input name="cpf" placeholder="CPF (somente números ou com pontuação)" required />
+        <input name="cpf" placeholder="CPF " required / maxLength={11} inputMode="numeric" pattern="\d{11}">
         <input name="rg" placeholder="RG" required />
         <input name="address" placeholder="Endereço" required />
         <input name="cep" placeholder="CEP" required />

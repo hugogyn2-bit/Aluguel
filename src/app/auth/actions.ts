@@ -29,14 +29,14 @@ function parseBRDate(input: string): Date | null {
 
 /** Helper: ler token dentro de Server Actions */
 async function getAuthToken() {
-  const h = await headers();
+  const h = (await headers()) as any;
   const c = cookies();
 
   const req = new Request("http://localhost", {
     headers: {
       cookie: c.toString(),
-      "x-forwarded-host": h.get("x-forwarded-host") ?? "",
-      "x-forwarded-proto": h.get("x-forwarded-proto") ?? "",
+      "x-forwarded-host": (h as any).get?.("x-forwarded-host") ?? "",
+      "x-forwarded-proto": (h as any).get?.("x-forwarded-proto") ?? "",
     },
   });
 
