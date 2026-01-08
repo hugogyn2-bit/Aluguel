@@ -1,28 +1,35 @@
+// src/app/api/auth/[...nextauth]/route.ts
 import NextAuth from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
-import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
+import bcrypt from "bcryptjs";
 
 const handler = NextAuth({
   session: { strategy: "jwt" },
+
   providers: [
     CredentialsProvider({
       name: "Credentials",
       credentials: {
-        identifier: { label: "Email", type: "text" },
-        password: { label: "Senha", type: "password" },
+        email: { label: "Email", type: "email" },
+        password: { label: "Password", type: "password" },
+        role: { label: "Role", type: "text" },
       },
       async authorize(credentials) {
-        const identifier = String(credentials?.identifier ?? "").trim().toLowerCase();
+        const email = String(credentials?.email ?? "").trim().toLowerCase();
         const password = String(credentials?.password ?? "");
+        const role = (String(credentials?.role ?? "TENANT") as "TENANT" | "OWNER");
 
-        if (!identifier || !password) return null;
+        if (!email || !password) return null;
 
-        const user = await prisma.user.findUnique({ where: { email: identifier } });
+        const user = await prisma.user.findUnique({ where: { email } });
         if (!user) return null;
 
         const ok = await bcrypt.compare(password, user.passwordHash);
         if (!ok) return null;
+
+        // Bloqueia role diferente
+        if (user.role !== role) return null;
 
         return {
           id: user.id,
@@ -35,16 +42,18 @@ const handler = NextAuth({
       },
     }),
   ],
+
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
         token.id = (user as any).id;
         token.role = (user as any).role;
         token.ownerPaid = (user as any).ownerPaid;
-        token.trialEndsAt = (user as any).trialEndsAt;
+        token.trialEndsAt = (user as any).trialEndsAt; // ISO string | undefined
       }
       return token;
     },
+
     async session({ session, token }) {
       (session as any).user.id = token.id;
       (session as any).user.role = token.role;
@@ -53,6 +62,7 @@ const handler = NextAuth({
       return session;
     },
   },
+
   pages: { signIn: "/auth/sign-in" },
   secret: process.env.NEXTAUTH_SECRET,
 });
