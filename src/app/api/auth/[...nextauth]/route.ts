@@ -1,4 +1,3 @@
-// src/app/api/auth/[...nextauth]/route.ts
 import NextAuth from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { prisma } from "@/lib/prisma";
@@ -13,12 +12,10 @@ const handler = NextAuth({
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
-        role: { label: "Role", type: "text" },
       },
       async authorize(credentials) {
         const email = String(credentials?.email ?? "").trim().toLowerCase();
         const password = String(credentials?.password ?? "");
-        const role = (String(credentials?.role ?? "TENANT") as "TENANT" | "OWNER");
 
         if (!email || !password) return null;
 
@@ -27,9 +24,6 @@ const handler = NextAuth({
 
         const ok = await bcrypt.compare(password, user.passwordHash);
         if (!ok) return null;
-
-        // Bloqueia role diferente
-        if (user.role !== role) return null;
 
         return {
           id: user.id,
@@ -49,7 +43,7 @@ const handler = NextAuth({
         token.id = (user as any).id;
         token.role = (user as any).role;
         token.ownerPaid = (user as any).ownerPaid;
-        token.trialEndsAt = (user as any).trialEndsAt; // ISO string | undefined
+        token.trialEndsAt = (user as any).trialEndsAt; // string ISO | undefined
       }
       return token;
     },

@@ -24,6 +24,9 @@ model User {
   ownerPaid    Boolean  @default(false)
   trialEndsAt  DateTime?
 
+  // ✅ Segurança extra (somente OWNER) – usada para reset de senha
+  birthDate    DateTime?
+
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

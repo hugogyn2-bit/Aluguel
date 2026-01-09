@@ -2,13 +2,9 @@ import { AuthShell } from "../_ui";
 import { signUpAction } from "../actions";
 import { redirect } from "next/navigation";
 
-export default async function Page({
-  searchParams,
-}: {
-  searchParams: Promise<{ role?: string }>;
-}) {
-  const sp = await searchParams;
-  const role = sp?.role === "OWNER" ? "OWNER" : "TENANT";
+export default function Page() {
+  // ✅ Cadastro público: somente OWNER
+  const role = "OWNER" as const;
 
   async function action(fd: FormData) {
     "use server";
@@ -43,11 +39,18 @@ export default async function Page({
           className="border rounded p-2"
         />
 
+        <input
+          name="birthDate"
+          placeholder="Data de nascimento (dd/mm/aaaa)"
+          required
+          className="border rounded p-2"
+        />
+
         <button type="submit" className="rounded bg-black text-white p-2">
           Criar conta
         </button>
 
-        <a className="text-sm underline" href={`/auth/sign-in?role=${role}`}>
+        <a className="text-sm underline" href={`/auth/sign-in`}>
           Entrar
         </a>
       </form>
