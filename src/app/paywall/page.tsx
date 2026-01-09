@@ -1,4 +1,5 @@
 import { PayButton } from "@/components/PayButton";
+import { TrialButton } from "./TrialButton";
 
 export default function Page() {
   return (
@@ -13,9 +14,7 @@ export default function Page() {
       </div>
 
       <div style={{ marginTop: 12 }}>
-        <a href="/api/owner/trial/start" style={{ fontSize: 14 }}>
-          Ativar teste grátis (3 dias)
-        </a>
+        <TrialButton />
       </div>
     </main>
   );

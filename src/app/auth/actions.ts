@@ -29,16 +29,14 @@ function parseBRDate(input: string): Date | null {
 
 /** Helper: ler token dentro de Server Actions */
 async function getAuthToken() {
-  // Next 16+ pode tipar headers()/cookies() como async em alguns ambientes,
-  // então usamos await para compatibilidade.
-  const h = await headers();
-  const c = await cookies();
+  const h = (await headers()) as any;
+  const c = cookies();
 
   const req = new Request("http://localhost", {
     headers: {
       cookie: c.toString(),
-      "x-forwarded-host": h.get("x-forwarded-host") ?? "",
-      "x-forwarded-proto": h.get("x-forwarded-proto") ?? "",
+      "x-forwarded-host": (h as any).get?.("x-forwarded-host") ?? "",
+      "x-forwarded-proto": (h as any).get?.("x-forwarded-proto") ?? "",
     },
   });
 
@@ -104,7 +102,8 @@ export async function signUpAction(fd: FormData) {
     data: { email, name, passwordHash, role, trialEndsAt, birthDate: birthDateParsed },
   });
 
-  return { ok: true, redirectTo: `/auth/sign-in?role=${role}` };
+  // envia query param para mostrar "Usuário criado com sucesso" na tela de login
+  return { ok: true, redirectTo: `/auth/sign-in?created=1` };
 }
 
 export async function signInAction(fd: FormData) {

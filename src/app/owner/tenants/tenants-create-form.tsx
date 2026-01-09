@@ -55,7 +55,7 @@ export default function TenantsCreateForm() {
       <form onSubmit={onSubmit} style={{ display: "grid", gap: 10, marginTop: 12 }}>
         <input name="email" type="email" placeholder="Email do inquilino" required />
         <input name="fullName" placeholder="Nome completo" required />
-        <input name="cpf" placeholder="CPF (somente números ou com pontuação)" required />
+        <input name="cpf" placeholder="CPF " required / maxLength={11} inputMode="numeric" pattern="\d{11}">
         <input name="rg" placeholder="RG" required />
         <input name="address" placeholder="Endereço" required />
         <input name="cep" placeholder="CEP" required />
@@ -75,7 +75,7 @@ export default function TenantsCreateForm() {
             <b>Senha temporária:</b> <code>{res.tempPassword}</code>
           </div>
           <div style={{ marginTop: 6, opacity: 0.75, fontSize: 13 }}>
-            O inquilino entra em <code>/auth/sign-in?role=TENANT</code> e depois você pode permitir troca de senha.
+            O inquilino entra em <code>/auth/sign-in</code> com o e-mail e a senha temporária. Depois ele pode trocar a senha.
           </div>
         </div>
       ) : res?.ok === false ? (
