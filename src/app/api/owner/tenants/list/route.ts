@@ -11,7 +11,8 @@ export async function GET(req: Request) {
     if (!token) return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     if (token.role !== "OWNER") return NextResponse.json({ error: "Somente OWNER" }, { status: 403 });
 
-    const ownerId = String(token.id);
+    const ownerId = String(token.id ?? token.uid ?? token.sub ?? "");
+    if (!ownerId) return NextResponse.json({ error: "Sessão inválida" }, { status: 401 });
 
     // ✅ Tenants pertencem ao OWNER via TenantProfile.ownerId
     const tenants = await prisma.tenantProfile.findMany({

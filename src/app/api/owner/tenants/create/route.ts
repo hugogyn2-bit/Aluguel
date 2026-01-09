@@ -9,22 +9,14 @@ export const runtime = "nodejs";
 const bodySchema = z.object({
   email: z.string().email(),
   fullName: z.string().min(3),
-  cpf: z.string().min(11),
+  cpf: z.string().length(11),
   rg: z.string().min(3),
   address: z.string().min(5),
-  cep: z.string().min(8),
+  cep: z.string().length(8),
 });
 
 function normalizeDigits(s: string) {
   return String(s || "").replace(/\D/g, "");
-}
-
-function makeTempPassword(length = 10) {
-  // simples e suficiente p/ senha temporária
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789@#!";
-  let out = "";
-  for (let i = 0; i < length; i++) out += chars[Math.floor(Math.random() * chars.length)];
-  return out;
 }
 
 export async function POST(req: Request) {
@@ -33,6 +25,9 @@ export async function POST(req: Request) {
 
     if (!token) return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     if (token.role !== "OWNER") return NextResponse.json({ error: "Somente OWNER" }, { status: 403 });
+
+    const ownerId = String(token.id ?? token.uid ?? token.sub ?? "");
+    if (!ownerId) return NextResponse.json({ error: "Sessão inválida" }, { status: 401 });
 
     // ✅ regra: owner passa se pagou OU está no trial
     const ownerPaid = !!token.ownerPaid;
@@ -53,7 +48,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Dados inválidos", details: parsed.error.flatten() }, { status: 400 });
     }
 
-    const ownerId = String(token.id);
     const { email, fullName, cpf, rg, address, cep } = parsed.data;
 
     // valida duplicidade
@@ -63,7 +57,7 @@ export async function POST(req: Request) {
     const existsCpf = await prisma.tenantProfile.findFirst({ where: { cpf } });
     if (existsCpf) return NextResponse.json({ error: "CPF já cadastrado" }, { status: 409 });
 
-    const tempPassword = makeTempPassword(10);
+    const tempPassword = cpf;
     const passwordHash = await bcrypt.hash(tempPassword, 10);
 
     // cria tudo em transação
@@ -98,7 +92,7 @@ export async function POST(req: Request) {
       ok: true,
       tenantUserId: created.user.id,
       tenantEmail: created.user.email,
-      tempPassword, // ✅ devolve a senha temporária pro OWNER copiar
+      tempPassword, // ✅ devolve a senha inicial (CPF) pro OWNER copiar
     });
   } catch (e: any) {
     console.error(e);

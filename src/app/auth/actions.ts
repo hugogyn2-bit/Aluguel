@@ -142,7 +142,6 @@ const createTenantSchema = z.object({
   rg: z.string().min(3, "RG obrigatório"),
   address: z.string().min(5, "Endereço obrigatório"),
   cep: z.string().transform(onlyDigits).refine((v) => cepRegex.test(v), "CEP deve ter 8 dígitos"),
-  tempPassword: z.string().min(6, "Senha inicial mínimo 6"),
 });
 
 export async function createTenantAction(fd: FormData) {
@@ -158,7 +157,6 @@ export async function createTenantAction(fd: FormData) {
     rg: String(fd.get("rg") ?? "").trim(),
     address: String(fd.get("address") ?? "").trim(),
     cep: String(fd.get("cep") ?? ""),
-    tempPassword: String(fd.get("tempPassword") ?? ""),
   };
 
   const parsed = createTenantSchema.safeParse(raw);
@@ -167,7 +165,9 @@ export async function createTenantAction(fd: FormData) {
     return { ok: false, error: msg };
   }
 
-  const { fullName, email, cpf, rg, address, cep, tempPassword } = parsed.data;
+  const { fullName, email, cpf, rg, address, cep } = parsed.data;
+  const ownerId = String(token.id ?? token.uid ?? token.sub ?? "");
+  if (!ownerId) return { ok: false, error: "Sessão inválida." };
 
   // não deixa email repetido
   const emailExists = await prisma.user.findUnique({ where: { email } });
@@ -177,7 +177,7 @@ export async function createTenantAction(fd: FormData) {
   const cpfExists = await prisma.tenantProfile.findUnique({ where: { cpf } }).catch(() => null);
   if (cpfExists) return { ok: false, error: "Já existe inquilino com esse CPF." };
 
-  const passwordHash = await bcrypt.hash(tempPassword, 10);
+  const passwordHash = await bcrypt.hash(cpf, 10);
 
   await prisma.$transaction(async (tx) => {
     const user = await tx.user.create({
@@ -194,7 +194,7 @@ export async function createTenantAction(fd: FormData) {
     await tx.tenantProfile.create({
       data: {
         userId: user.id,
-        ownerId: String(token.id),
+        ownerId,
         fullName,
         cpf,
         rg,
@@ -235,7 +235,10 @@ export async function tenantChangePasswordAction(fd: FormData) {
 
   const { currentPassword, newPassword } = parsed.data;
 
-  const user = await prisma.user.findUnique({ where: { id: String(token.id) } });
+  const userId = String(token.id ?? token.uid ?? token.sub ?? "");
+  if (!userId) return { ok: false, error: "Sessão inválida." };
+
+  const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) return { ok: false, error: "Usuário não encontrado." };
 
   const ok = await bcrypt.compare(currentPassword, user.passwordHash);

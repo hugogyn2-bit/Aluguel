@@ -22,7 +22,8 @@ export async function POST(req: Request) {
     const parsed = schema.safeParse(body);
     if (!parsed.success) return NextResponse.json({ error: "Dados inválidos" }, { status: 400 });
 
-    const userId = String(token.id);
+    const userId = String(token.id ?? token.uid ?? token.sub ?? "");
+    if (!userId) return NextResponse.json({ error: "Sessão inválida" }, { status: 401 });
 
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) return NextResponse.json({ error: "Usuário não encontrado" }, { status: 404 });
