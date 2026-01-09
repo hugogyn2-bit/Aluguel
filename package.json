@@ -4,9 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "node ./node_modules/next/dist/bin/next dev",
-    "build": "NEXT_TELEMETRY_DISABLED=1 NODE_OPTIONS=--max-old-space-size=6144 node ./node_modules/prisma/build/index.js generate && node ./node_modules/next/dist/bin/next build",
+    "build": "NEXT_TELEMETRY_DISABLED=1 NODE_OPTIONS=--max-old-space-size=6144 node ./node_modules/prisma/build/index.js generate && node ./node_modules/next/dist/bin/next build --no-lint",
     "start": "node ./node_modules/next/dist/bin/next start",
-    "lint": "node ./node_modules/eslint/bin/eslint.js .",
+    "lint": "node ./node_modules/next/dist/bin/next lint",
     "prisma:generate": "node ./node_modules/prisma/build/index.js generate",
     "prisma:migrate": "node ./node_modules/prisma/build/index.js migrate deploy",
     "prisma:studio": "node ./node_modules/prisma/build/index.js studio"
