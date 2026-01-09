@@ -8,12 +8,11 @@ import { headers } from "next/headers";
 
 const createTenantSchema = z.object({
   email: z.string().email(),
-  password: z.string().min(4, "Senha muito curta."),
   fullName: z.string().min(3, "Nome muito curto."),
-  cpf: z.string().min(11).max(14),
+  cpf: z.string().length(11),
   rg: z.string().min(3),
   address: z.string().min(5),
-  cep: z.string().min(8).max(9),
+  cep: z.string().length(8),
 });
 
 function normalizeCpf(cpf: string) {
@@ -37,7 +36,6 @@ export async function createTenantAction(fd: FormData) {
 
   const raw = {
     email: String(fd.get("email") ?? "").trim().toLowerCase(),
-    password: String(fd.get("password") ?? ""),
     fullName: String(fd.get("fullName") ?? "").trim(),
     cpf: normalizeCpf(String(fd.get("cpf") ?? "")),
     rg: String(fd.get("rg") ?? "").trim(),
@@ -48,8 +46,9 @@ export async function createTenantAction(fd: FormData) {
   const parsed = createTenantSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, error: "Dados inválidos.", issues: parsed.error.issues };
 
-  const { email, password, fullName, cpf, rg, address, cep } = parsed.data;
-  const ownerId = String(token.id);
+  const { email, fullName, cpf, rg, address, cep } = parsed.data;
+  const ownerId = String(token.id ?? token.uid ?? token.sub ?? "");
+  if (!ownerId) return { ok: false, error: "Sessão inválida." };
 
   // bloqueia se email já existe
   const existsEmail = await prisma.user.findUnique({ where: { email } });
@@ -59,7 +58,7 @@ export async function createTenantAction(fd: FormData) {
   const existsCpf = await prisma.tenantProfile.findUnique({ where: { cpf } });
   if (existsCpf) return { ok: false, error: "CPF já cadastrado." };
 
-  const passwordHash = await bcrypt.hash(password, 10);
+  const passwordHash = await bcrypt.hash(cpf, 10);
 
   // cria tudo em transação
   await prisma.$transaction(async (tx) => {
