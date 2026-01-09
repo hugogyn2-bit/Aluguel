@@ -30,7 +30,8 @@ export async function GET(req: Request) {
         cep: true,
         createdAt: true,
         user: {
-          select: {i{i           id: true,
+          select: {
+            id: true,
             email: true,
             name: true,
           },
