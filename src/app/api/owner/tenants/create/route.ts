@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 const bodySchema = z.object({
   email: z.string().email(),
   fullName: z.string().min(3),
-  cpf: z.string().length(11),
+  cpf: z.string().min(11),
   rg: z.string().min(3),
   address: z.string().min(5),
   cep: z.string().min(8),
@@ -63,7 +63,7 @@ export async function POST(req: Request) {
     const existsCpf = await prisma.tenantProfile.findFirst({ where: { cpf } });
     if (existsCpf) return NextResponse.json({ error: "CPF já cadastrado" }, { status: 409 });
 
-    const tempPassword = cpf;
+    const tempPassword = makeTempPassword(10);
     const passwordHash = await bcrypt.hash(tempPassword, 10);
 
     // cria tudo em transação

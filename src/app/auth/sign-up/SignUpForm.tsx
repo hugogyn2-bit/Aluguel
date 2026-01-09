@@ -37,7 +37,7 @@ export function SignUpForm() {
       <input name="password" type="password" placeholder="Senha (mín. 6)" minLength={6} required />
 
       <button type="submit" disabled={loading}>
-        {loading ? "Criando..." : "Criar conta"}
+        {loading ? "Criando..." : "Criar conta (Proprietário)"}
       </button>
 
       {err ? <p style={{ color: "crimson" }}>{err}</p> : null}
