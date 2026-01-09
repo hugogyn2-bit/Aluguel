@@ -75,7 +75,7 @@ export default function TenantsCreateForm() {
             <b>Senha temporária:</b> <code>{res.tempPassword}</code>
           </div>
           <div style={{ marginTop: 6, opacity: 0.75, fontSize: 13 }}>
-            O inquilino entra em <code>/auth/sign-in</code> com o e-mail e a senha temporária. Depois ele pode trocar a senha.
+            O inquilino entra em <code>/auth/sign-in?role=TENANT</code> e depois você pode permitir troca de senha.
           </div>
         </div>
       ) : res?.ok === false ? (

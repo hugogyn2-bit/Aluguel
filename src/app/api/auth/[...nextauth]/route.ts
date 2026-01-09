@@ -13,10 +13,12 @@ const handler = NextAuth({
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
+        role: { label: "Role", type: "text" },
       },
       async authorize(credentials) {
         const email = String(credentials?.email ?? "").trim().toLowerCase();
         const password = String(credentials?.password ?? "");
+        const role = (String(credentials?.role ?? "TENANT") as "TENANT" | "OWNER");
 
         if (!email || !password) return null;
 
@@ -26,8 +28,8 @@ const handler = NextAuth({
         const ok = await bcrypt.compare(password, user.passwordHash);
         if (!ok) return null;
 
-	        // Login único: valida apenas e-mail/senha.
-	        // A rota de destino (OWNER/TENANT) é definida depois via /api/post-login
+        // Bloqueia role diferente
+        if (user.role !== role) return null;
 
         return {
           id: user.id,

@@ -2,8 +2,17 @@ import { AuthShell } from "../_ui";
 import { signUpAction } from "../actions";
 import { redirect } from "next/navigation";
 
-export default function Page() {
-  // ✅ Cadastro público: somente OWNER
+export default async function Page({
+  searchParams,
+}: {
+  searchParams: Promise<{ role?: string }>;
+}) {
+  const sp = await searchParams;
+  // Cadastro público: somente OWNER
+  const requestedRole = sp?.role;
+  if (requestedRole && requestedRole !== "OWNER") {
+    redirect("/auth/sign-in?role=TENANT");
+  }
   const role = "OWNER" as const;
 
   async function action(fd: FormData) {
@@ -50,7 +59,7 @@ export default function Page() {
           Criar conta
         </button>
 
-        <a className="text-sm underline" href={`/auth/sign-in`}>
+        <a className="text-sm underline" href={`/auth/sign-in?role=OWNER`}>
           Entrar
         </a>
       </form>

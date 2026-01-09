@@ -4,47 +4,51 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { signUpAction } from "../actions";
 
-export function SignUpForm() {
+export default function SignUpForm({ role }: { role: "TENANT" | "OWNER" }) {
   const router = useRouter();
-
+  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    setError(null);
     setLoading(true);
-    setErr(null);
 
     const fd = new FormData(e.currentTarget);
+    fd.set("role", role);
+
     const res = await signUpAction(fd);
 
     setLoading(false);
 
-    if (!res.ok) {
-      setErr(res.error || "Não foi possível criar sua conta.");
+    if (!res?.ok) {
+      setError(res?.error ?? "Erro ao cadastrar.");
       return;
     }
 
-    // manda para o login com mensagem
-    router.push(res.redirectTo || "/auth/sign-in?created=1");
+    router.push(res.redirectTo ?? `/auth/sign-in?role=${role}`);
   }
 
   return (
-    <form onSubmit={onSubmit} style={{ display: "grid", gap: 12, marginTop: 16 }}>
-      <input name="name" type="text" placeholder="Nome" />
-      <input name="email" type="email" placeholder="Email" required />
-      <input name="birthDate" type="text" placeholder="Data de nascimento (dd/mm/aaaa)" required />
-      <input name="password" type="password" placeholder="Senha (mín. 6)" minLength={6} required />
+    <main style={{ maxWidth: 420, margin: "40px auto", padding: 16 }}>
+      <h1 style={{ fontSize: 24, fontWeight: 700 }}>Criar conta</h1>
+      <p style={{ opacity: 0.7, marginTop: 8 }}>Cadastre-se para continuar.</p>
 
-      <button type="submit" disabled={loading}>
-        {loading ? "Criando..." : "Criar conta (Proprietário)"}
-      </button>
+      <form onSubmit={onSubmit} style={{ display: "grid", gap: 12, marginTop: 16 }}>
+        <input name="name" placeholder="Nome (opcional)" />
+        <input name="email" type="email" placeholder="Email" required />
+        <input name="password" type="password" placeholder="Senha" minLength={6} required />
 
-      {err ? <p style={{ color: "crimson" }}>{err}</p> : null}
+        <button type="submit" disabled={loading}>
+          {loading ? "Criando..." : "Criar conta"}
+        </button>
+      </form>
 
-      <p style={{ marginTop: 8, fontSize: 14, opacity: 0.7 }}>
-        Já tem conta? <a href="/auth/sign-in">Entrar</a>
+      {error && <p style={{ color: "crimson", marginTop: 12 }}>{error}</p>}
+
+      <p style={{ marginTop: 16, fontSize: 14, opacity: 0.7 }}>
+        Já tem conta? <a href={`/auth/sign-in?role=${role}`}>Entrar</a>
       </p>
-    </form>
+    </main>
   );
 }
