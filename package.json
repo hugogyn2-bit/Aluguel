@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "node ./node_modules/next/dist/bin/next dev",
-    "build": "NEXT_TELEMETRY_DISABLED=1 NODE_OPTIONS=--max-old-space-size=6144 node ./node_modules/prisma/build/index.js generate && node ./node_modules/next/dist/bin/next build --webpack",
+    "build": "NEXT_TELEMETRY_DISABLED=1 NODE_OPTIONS=--max-old-space-size=6144 node ./node_modules/prisma/build/index.js generate && node ./node_modules/next/dist/bin/next build",
     "start": "node ./node_modules/next/dist/bin/next start",
     "lint": "node ./node_modules/eslint/bin/eslint.js .",
     "prisma:generate": "node ./node_modules/prisma/build/index.js generate",
@@ -12,29 +12,29 @@
     "prisma:studio": "node ./node_modules/prisma/build/index.js studio"
   },
   "dependencies": {
-    "@prisma/client": "^5.19.1",
-    "bcryptjs": "^2.4.3",
-    "clsx": "^2.1.1",
-    "lucide-react": "^0.454.0",
+    "@prisma/client": "5.22.0",
+    "bcryptjs": "2.4.3",
+    "clsx": "2.1.1",
+    "lucide-react": "0.454.0",
     "next": "15.3.8",
-    "next-auth": "^4.24.11",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "tailwind-merge": "^2.5.4",
-    "zod": "^3.23.8"
+    "next-auth": "4.24.11",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "tailwind-merge": "2.5.4",
+    "zod": "3.23.8"
   },
   "devDependencies": {
-    "@types/bcryptjs": "^2.4.6",
-    "@types/node": "^20.11.0",
-    "@types/react": "^19.0.2",
-    "@types/react-dom": "^19.0.2",
-    "autoprefixer": "^10.4.20",
-    "eslint": "^9.17.0",
+    "@types/bcryptjs": "2.4.6",
+    "@types/node": "20.11.0",
+    "@types/react": "18.2.45",
+    "@types/react-dom": "18.2.18",
+    "autoprefixer": "10.4.20",
+    "eslint": "8.57.1",
     "eslint-config-next": "15.3.8",
-    "postcss": "^8.4.49",
-    "prisma": "^5.19.1",
-    "tailwindcss": "^3.4.16",
-    "typescript": "^5.7.2"
+    "postcss": "8.4.49",
+    "prisma": "5.22.0",
+    "tailwindcss": "3.4.16",
+    "typescript": "5.7.2"
   },
   "engines": {
     "node": "20.x"
