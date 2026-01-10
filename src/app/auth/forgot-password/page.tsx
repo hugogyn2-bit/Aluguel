@@ -1,21 +1,76 @@
-import { Suspense } from "react";
-import { ForgotPasswordForm } from "./ForgotPasswordForm";
+"use client";
 
-export default function Page() {
+import { useState } from "react";
+import { Button } from "@/components/Button";
+import Link from "next/link";
+
+export default function ForgotPasswordPage() {
+  const [email, setEmail] = useState("");
+  const [birthDate, setBirthDate] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    setMessage(null);
+
+    const res = await fetch("/api/auth/forgot-password", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email, birthDate }),
+    });
+
+    setLoading(false);
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      setError(data?.error ?? "Erro ao verificar dados.");
+      return;
+    }
+
+    setMessage("Dados confirmados. Continue para redefinir sua senha.");
+  }
+
   return (
-    <main style={{ maxWidth: 420, margin: "40px auto", padding: 16 }}>
-      <h1 style={{ fontSize: 24, fontWeight: 700 }}>Esqueci minha senha (OWNER)</h1>
-      <p style={{ opacity: 0.7, marginTop: 8 }}>
-        Defina uma nova senha para sua conta de proprietário.
-      </p>
+    <main className="min-h-screen flex items-center justify-center px-5">
+      <div className="w-full max-w-md space-y-6">
+        <h1 className="text-3xl font-black tracking-tight">Esqueci minha senha</h1>
 
-      <Suspense fallback={null}>
-        <ForgotPasswordForm />
-      </Suspense>
+        {error && <p className="text-sm text-red-500">{error}</p>}
+        {message && <p className="text-sm text-green-600">{message}</p>}
 
-      <p style={{ marginTop: 16, fontSize: 14, opacity: 0.7 }}>
-        Voltar para <a href="/auth/sign-in?role=OWNER">Entrar</a>
-      </p>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <input
+            className="w-full rounded-xl border px-4 py-3"
+            type="email"
+            placeholder="E-mail"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
+
+          <input
+            className="w-full rounded-xl border px-4 py-3"
+            type="date"
+            value={birthDate}
+            onChange={(e) => setBirthDate(e.target.value)}
+            required
+          />
+
+          <Button type="submit" disabled={loading} className="w-full">
+            {loading ? "Verificando..." : "Continuar"}
+          </Button>
+        </form>
+
+        <div className="text-center">
+          <Link href="/auth/sign-in" className="text-sm underline">
+            Voltar para login
+          </Link>
+        </div>
+      </div>
     </main>
   );
 }

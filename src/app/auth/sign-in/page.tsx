@@ -1,15 +1,89 @@
-import { Suspense } from "react";
-import { SignInForm } from "./SignInForm";
+"use client";
 
-export default function Page() {
+import { signIn } from "next-auth/react";
+import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
+import { Button } from "@/components/Button";
+
+export default function SignInPage() {
+  const router = useRouter();
+  const params = useSearchParams();
+
+  const created = params.get("created");
+  const changed = params.get("changed");
+  const reset = params.get("reset");
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    const res = await signIn("credentials", {
+      email,
+      password,
+      redirect: false,
+    });
+
+    setLoading(false);
+
+    if (!res || res.error) {
+      setError("E-mail ou senha inválidos.");
+      return;
+    }
+
+    router.push("/api/post-login");
+  }
+
   return (
-    <main style={{ maxWidth: 420, margin: "40px auto", padding: 16 }}>
-      <h1 style={{ fontSize: 24, fontWeight: 700 }}>Entrar</h1>
-      <p style={{ opacity: 0.7, marginTop: 8 }}>Acesse sua conta para continuar.</p>
+    <main className="min-h-screen flex items-center justify-center px-5">
+      <div className="w-full max-w-md space-y-6">
+        <h1 className="text-3xl font-black tracking-tight">Login</h1>
 
-      <Suspense fallback={null}>
-        <SignInForm />
-      </Suspense>
+        {created && <p className="text-sm text-green-600">Conta criada com sucesso.</p>}
+        {changed && <p className="text-sm text-green-600">Senha alterada com sucesso.</p>}
+        {reset && <p className="text-sm text-green-600">Senha redefinida com sucesso.</p>}
+        {error && <p className="text-sm text-red-500">{error}</p>}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <input
+            className="w-full rounded-xl border px-4 py-3"
+            type="email"
+            placeholder="E-mail"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
+
+          <input
+            className="w-full rounded-xl border px-4 py-3"
+            type="password"
+            placeholder="Senha"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
+
+          <Button type="submit" disabled={loading} className="w-full">
+            {loading ? "Entrando..." : "Entrar"}
+          </Button>
+        </form>
+
+        <div className="text-center space-y-2">
+          <Link href="/auth/sign-up" className="text-sm underline">
+            Criar conta
+          </Link>
+          <br />
+          <Link href="/auth/forgot-password" className="text-sm underline">
+            Esqueci minha senha
+          </Link>
+        </div>
+      </div>
     </main>
   );
 }

@@ -1,8 +1,10 @@
 import { Logo } from "@/components/Logo";
 import { ShieldCheck } from "lucide-react";
 
-export default function Page() {
-  return (
+export default function HomePage() {
+  return null;
+}
+
     <main className="mx-auto max-w-md px-5 py-10">
       <div className="flex items-start justify-between gap-6">
         <Logo />
