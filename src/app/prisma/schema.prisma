@@ -1,0 +1,65 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  TENANT
+  OWNER
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String?
+  passwordHash String
+
+  role         Role     @default(TENANT)
+
+  // Premium
+  ownerPaid    Boolean  @default(false)
+  trialEndsAt  DateTime?
+
+  // ✅ Segurança extra (somente OWNER) – usada para reset de senha
+  birthDate    DateTime?
+
+  // ✅ Força troca de senha no primeiro login (TENANT)
+  mustChangePassword Boolean @default(false)
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // ✅ Se esse usuário for TENANT, terá um perfil
+  tenantProfile TenantProfile? @relation("TenantUser")
+
+  // ✅ Se esse usuário for OWNER, poderá ter vários tenants vinculados
+  ownedTenants  TenantProfile[] @relation("OwnerTenants")
+}
+
+model TenantProfile {
+  id        String   @id @default(cuid())
+
+  // 🔗 vínculo com TENANT (User)
+  userId    String   @unique
+  user      User     @relation("TenantUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  // 🔗 vínculo com OWNER (User) que criou o TENANT
+  ownerId   String
+  owner     User     @relation("OwnerTenants", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  // 🧾 dados do inquilino
+  fullName  String
+  cpf       String   @unique
+  rg        String
+  address   String
+  cep       String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ownerId])
+}
