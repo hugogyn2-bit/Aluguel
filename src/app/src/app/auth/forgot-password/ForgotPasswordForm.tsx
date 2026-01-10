@@ -1,58 +1,77 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Button } from "@/components/Button";
+import { Input } from "@/components/Input";
+import Link from "next/link";
 
-export function ForgotPasswordForm() {
-  const router = useRouter();
+export default function ForgotPasswordPage() {
+  const [email, setEmail] = useState("");
+  const [birthDate, setBirthDate] = useState("");
   const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  const [ok, setOk] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
-    setErr(null);
-    setOk(null);
+    setError(null);
+    setMessage(null);
 
-    try {
-      const fd = new FormData(e.currentTarget);
-      const res = await fetch("/auth/forgot-password/submit", {
-        method: "POST",
-        body: fd,
-      });
-      const data = await res.json().catch(() => ({}));
+    const res = await fetch("/api/auth/forgot-password", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email, birthDate }),
+    });
 
-      if (!res.ok) {
-        setErr(data?.error || "Não foi possível redefinir a senha.");
-        return;
-      }
+    setLoading(false);
 
-      setOk("Senha alterada! Faça login novamente.");
-      setTimeout(() => router.push("/auth/sign-in?role=OWNER"), 800);
-    } catch (e: any) {
-      setErr(e?.message || "Erro inesperado.");
-    } finally {
-      setLoading(false);
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      setError(data?.error ?? "Erro ao solicitar redefinição.");
+      return;
     }
+
+    setMessage("Dados confirmados. Você pode redefinir sua senha.");
   }
 
   return (
-    <form onSubmit={onSubmit} style={{ display: "grid", gap: 12, marginTop: 16 }}>
-      <input name="email" type="email" placeholder="Seu email de OWNER" required />
-      <input
-        name="birthDate"
-        placeholder="Data de nascimento (dd/mm/aaaa)"
-        inputMode="numeric"
-        required
-      />
-      <input name="newPassword" type="password" placeholder="Nova senha" minLength={6} required />
-      <button type="submit" disabled={loading}>
-        {loading ? "Salvando..." : "Redefinir senha"}
-      </button>
+    <main className="min-h-screen flex items-center justify-center px-5">
+      <div className="w-full max-w-md space-y-6">
+        <h1 className="text-3xl font-black tracking-tight">Esqueci minha senha</h1>
 
-      {err ? <p style={{ color: "crimson" }}>{err}</p> : null}
-      {ok ? <p style={{ color: "green" }}>{ok}</p> : null}
-    </form>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <Input
+            type="email"
+            placeholder="E-mail"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
+
+          <Input
+            type="date"
+            value={birthDate}
+            onChange={(e) => setBirthDate(e.target.value)}
+            required
+          />
+
+          {error && <p className="text-sm text-red-500">{error}</p>}
+          {message && (
+            <p className="text-sm text-green-600 font-medium">{message}</p>
+          )}
+
+          <Button type="submit" disabled={loading} className="w-full">
+            {loading ? "Verificando..." : "Continuar"}
+          </Button>
+        </form>
+
+        <div className="text-center">
+          <Link href="/auth/sign-in" className="text-sm underline opacity-90">
+            Voltar para login
+          </Link>
+        </div>
+      </div>
+    </main>
   );
 }
