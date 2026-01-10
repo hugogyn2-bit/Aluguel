@@ -6,7 +6,7 @@ export default function Page() {
     <main className="mx-auto max-w-md px-5 py-10">
       <div className="flex items-start justify-between gap-6">
         <Logo />
-        <div className="text-xs text-muted mt-2">Sessão segura via NextAuth.</div>
+        <div className="text-xs text-muted mt-2">
       </div>
 
       <section className="mt-10">
@@ -27,14 +27,14 @@ export default function Page() {
             href="/auth/sign-up"
             className="rounded-2xl border border-white/10 bg-surface/80 px-4 py-3 text-center"
           >
-            Criar conta (proprietário)
+            Criar conta
           </a>
 
           <a
             href="/auth/forgot-password"
             className="rounded-2xl border border-white/10 bg-surface/60 px-4 py-3 text-center"
           >
-            Esqueci minha senha (proprietário)
+            Esqueci minha senha 
           </a>
         </div>
 
