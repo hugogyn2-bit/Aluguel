@@ -17,13 +17,20 @@ export const authOptions: NextAuthOptions = {
   providers: [
     CredentialsProvider({
       name: "Email e Senha",
-      credentials: { email: { label: "Email" }, password: { label: "Senha", type: "password" } },
+      credentials: {
+        email: { label: "Email" },
+        password: { label: "Senha", type: "password" },
+      },
       async authorize(credentials) {
         const parsed = credsSchema.safeParse(credentials);
         if (!parsed.success) return null;
 
         const { email, password } = parsed.data;
-        const user = await prisma.user.findUnique({ where: { email } });
+
+        // ✅ NORMALIZA o e-mail (o cadastro salva assim)
+        const emailNorm = email.toLowerCase().trim();
+
+        const user = await prisma.user.findUnique({ where: { email: emailNorm } });
         if (!user) return null;
 
         const ok = await bcrypt.compare(password, user.passwordHash);
@@ -32,9 +39,9 @@ export const authOptions: NextAuthOptions = {
         return {
           id: user.id,
           email: user.email,
-          name: user.name ?? undefined,
+          name: (user as any).name ?? undefined,
           role: user.role,
-          ownerPaid: user.ownerPaid,
+          ownerPaid: (user as any).ownerPaid,
         } as any;
       },
     }),
@@ -44,23 +51,30 @@ export const authOptions: NextAuthOptions = {
       // on login
       if (user) {
         token.uid = (user as any).id;
-        token.id = (user as any).id;
+        (token as any).id = (user as any).id;
         token.role = (user as any).role;
         token.ownerPaid = (user as any).ownerPaid;
       }
-      // refresh from db occasionally
+
+      // refresh from db
       if (token?.uid) {
-        const dbUser = await prisma.user.findUnique({ where: { id: token.uid as string } });
+        const dbUser = await prisma.user.findUnique({
+          where: { id: token.uid as string },
+        });
+
         if (dbUser) {
           (token as any).id = dbUser.id;
           token.role = dbUser.role;
-          token.ownerPaid = dbUser.ownerPaid;
-          token.mustChangePassword = (dbUser as any).mustChangePassword;
-          token.trialEndsAt = (dbUser as any).trialEndsAt ? (dbUser as any).trialEndsAt.toISOString() : undefined;
+          token.ownerPaid = (dbUser as any).ownerPaid;
+          (token as any).mustChangePassword = (dbUser as any).mustChangePassword;
+          (token as any).trialEndsAt = (dbUser as any).trialEndsAt
+            ? (dbUser as any).trialEndsAt.toISOString()
+            : undefined;
           token.email = dbUser.email;
-          token.name = dbUser.name ?? undefined;
+          token.name = (dbUser as any).name ?? undefined;
         }
       }
+
       return token;
     },
     async session({ session, token }) {
