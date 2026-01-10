@@ -67,9 +67,9 @@ export function SignInForm() {
       </form>
 
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", fontSize: 14, opacity: 0.85 }}>
-        <a href="/auth/sign-up">Criar conta (proprietário)</a>
+        <a href="/auth/sign-up">(proprietário) Criar conta</a>
         <span>•</span>
-        <a href="/auth/forgot-password">Esqueci minha senha (proprietário)</a>
+        <a href="/auth/forgot-password">(proprietário) Esqueci minha senha</a>
       </div>
     </div>
   );
