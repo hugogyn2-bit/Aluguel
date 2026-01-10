@@ -49,6 +49,9 @@ export async function createTenantAction(fd: FormData) {
   if (!parsed.success) return { ok: false, error: "Dados inválidos.", issues: parsed.error.issues };
 
   const { email, password, fullName, cpf, rg, address, cep } = parsed.data;
+
+  const cpfDigits = cpf.replace(/\D/g, "");
+  if (cpfDigits.length !== 11) return { ok: false, error: "CPF deve ter 11 números." };
   const ownerId = String(token.id);
 
   // bloqueia se email já existe
@@ -59,7 +62,8 @@ export async function createTenantAction(fd: FormData) {
   const existsCpf = await prisma.tenantProfile.findUnique({ where: { cpf } });
   if (existsCpf) return { ok: false, error: "CPF já cadastrado." };
 
-  const passwordHash = await bcrypt.hash(password, 10);
+  const tempPassword = cpfDigits; // senha inicial = CPF
+  const passwordHash = await bcrypt.hash(tempPassword, 10);
 
   // cria tudo em transação
   await prisma.$transaction(async (tx) => {
@@ -68,6 +72,7 @@ export async function createTenantAction(fd: FormData) {
         email,
         passwordHash,
         role: "TENANT",
+          mustChangePassword: true,
         name: fullName,
       },
     });
@@ -77,7 +82,7 @@ export async function createTenantAction(fd: FormData) {
         userId: tenantUser.id,
         ownerId,
         fullName,
-        cpf,
+        cpf: cpfDigits,
         rg,
         address,
         cep,

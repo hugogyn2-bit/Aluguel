@@ -44,6 +44,7 @@ export const authOptions: NextAuthOptions = {
       // on login
       if (user) {
         token.uid = (user as any).id;
+        token.id = (user as any).id;
         token.role = (user as any).role;
         token.ownerPaid = (user as any).ownerPaid;
       }
@@ -51,8 +52,11 @@ export const authOptions: NextAuthOptions = {
       if (token?.uid) {
         const dbUser = await prisma.user.findUnique({ where: { id: token.uid as string } });
         if (dbUser) {
+          (token as any).id = dbUser.id;
           token.role = dbUser.role;
           token.ownerPaid = dbUser.ownerPaid;
+          token.mustChangePassword = (dbUser as any).mustChangePassword;
+          token.trialEndsAt = (dbUser as any).trialEndsAt ? (dbUser as any).trialEndsAt.toISOString() : undefined;
           token.email = dbUser.email;
           token.name = dbUser.name ?? undefined;
         }
@@ -60,9 +64,11 @@ export const authOptions: NextAuthOptions = {
       return token;
     },
     async session({ session, token }) {
-      (session.user as any).id = token.uid;
+      (session.user as any).id = (token as any).id ?? (token as any).uid;
       (session.user as any).role = token.role;
       (session.user as any).ownerPaid = token.ownerPaid;
+      (session.user as any).trialEndsAt = (token as any).trialEndsAt;
+      (session.user as any).mustChangePassword = (token as any).mustChangePassword;
       return session;
     },
   },

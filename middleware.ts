@@ -46,6 +46,12 @@ export async function middleware(req: NextRequest) {
   if (pathname.startsWith("/tenant")) {
     if (!isAuth) return redirectTo(`/auth/sign-in`, req);
     if (role !== "TENANT") return redirectTo(`/owner`, req);
+
+    // ✅ Força troca de senha do TENANT no primeiro acesso
+    const mustChangePassword = !!(token as any)?.mustChangePassword;
+    if (mustChangePassword && !pathname.startsWith("/tenant/change-password")) {
+      return redirectTo(`/tenant/change-password`, req);
+    }
     return NextResponse.next();
   }
 

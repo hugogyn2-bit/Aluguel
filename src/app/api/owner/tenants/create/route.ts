@@ -19,6 +19,10 @@ function normalizeDigits(s: string) {
   return String(s || "").replace(/\D/g, "");
 }
 
+function normalizeCpf(cpf: string) {
+  return cpf.replace(/\D/g, "");
+}
+
 function makeTempPassword(length = 10) {
   // simples e suficiente p/ senha temporária
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789@#!";
@@ -56,14 +60,19 @@ export async function POST(req: Request) {
     const ownerId = String(token.id);
     const { email, fullName, cpf, rg, address, cep } = parsed.data;
 
+    const cpfDigits = String(cpf);
+    if (cpfDigits.length !== 11) {
+      return NextResponse.json({ error: "CPF deve ter 11 números." }, { status: 400 });
+    }
+
     // valida duplicidade
     const existsEmail = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
     if (existsEmail) return NextResponse.json({ error: "E-mail já cadastrado" }, { status: 409 });
 
-    const existsCpf = await prisma.tenantProfile.findFirst({ where: { cpf } });
+    const existsCpf = await prisma.tenantProfile.findFirst({ where: { cpf: cpfDigits } });
     if (existsCpf) return NextResponse.json({ error: "CPF já cadastrado" }, { status: 409 });
 
-    const tempPassword = makeTempPassword(10);
+    const tempPassword = cpfDigits; // ✅ senha inicial = CPF (11 números)
     const passwordHash = await bcrypt.hash(tempPassword, 10);
 
     // cria tudo em transação
@@ -74,6 +83,7 @@ export async function POST(req: Request) {
           name: fullName,
           passwordHash,
           role: "TENANT",
+          mustChangePassword: true,
         },
         select: { id: true, email: true },
       });
@@ -83,7 +93,7 @@ export async function POST(req: Request) {
           userId: user.id,
           ownerId,
           fullName,
-          cpf,
+          cpf: cpfDigits,
           rg,
           address,
           cep,

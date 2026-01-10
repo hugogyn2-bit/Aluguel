@@ -8,5 +8,9 @@ export async function GET(req: Request) {
   if (!token) return NextResponse.redirect(new URL("/auth/sign-in", req.url));
 
   if (token.role === "OWNER") return NextResponse.redirect(new URL("/owner", req.url));
+
+  // ✅ Se for TENANT e ainda precisa trocar senha, envia pra tela correta
+  if ((token as any).mustChangePassword) return NextResponse.redirect(new URL("/tenant/change-password", req.url));
+
   return NextResponse.redirect(new URL("/tenant", req.url));
 }
