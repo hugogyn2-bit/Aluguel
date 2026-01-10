@@ -51,7 +51,7 @@ export function SignInForm() {
             fontSize: 14,
           }}
         >
-          Usuário criado com sucesso.
+          Conta criada com sucesso.
         </div>
       ) : null}
 
