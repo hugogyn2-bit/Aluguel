@@ -11,9 +11,7 @@ const credsSchema = z.object({
 
 export const authOptions: NextAuthOptions = {
   session: { strategy: "jwt" },
-  pages: {
-    signIn: "/auth/sign-in",
-  },
+  pages: { signIn: "/auth/sign-in" },
   providers: [
     CredentialsProvider({
       name: "Email e Senha",
@@ -26,11 +24,18 @@ export const authOptions: NextAuthOptions = {
         if (!parsed.success) return null;
 
         const { email, password } = parsed.data;
+        const emailNorm = email.trim();
 
-        // ✅ NORMALIZA o e-mail (o cadastro salva assim)
-        const emailNorm = email.toLowerCase().trim();
+        // ✅ BUSCA CASE-INSENSITIVE (resolve e-mail salvo com maiúsculas no passado)
+        const user = await prisma.user.findFirst({
+          where: {
+            email: {
+              equals: emailNorm,
+              mode: "insensitive",
+            },
+          },
+        });
 
-        const user = await prisma.user.findUnique({ where: { email: emailNorm } });
         if (!user) return null;
 
         const ok = await bcrypt.compare(password, user.passwordHash);
@@ -39,7 +44,7 @@ export const authOptions: NextAuthOptions = {
         return {
           id: user.id,
           email: user.email,
-          name: (user as any).name ?? undefined,
+          name: user.name ?? undefined,
           role: user.role,
           ownerPaid: (user as any).ownerPaid,
         } as any;
@@ -71,7 +76,7 @@ export const authOptions: NextAuthOptions = {
             ? (dbUser as any).trialEndsAt.toISOString()
             : undefined;
           token.email = dbUser.email;
-          token.name = (dbUser as any).name ?? undefined;
+          token.name = dbUser.name ?? undefined;
         }
       }
 
