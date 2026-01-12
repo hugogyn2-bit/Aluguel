@@ -2,25 +2,35 @@
 
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 export function SignInForm() {
   const router = useRouter();
-  const sp = useSearchParams();
+  const searchParams = useSearchParams();
 
-  const created = useMemo(() => sp.get("created") === "1", [sp]);
+  // 🔒 Garante que o formulário só exista após hidratação
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const created = useMemo(
+    () => searchParams.get("created") === "1",
+    [searchParams]
+  );
 
   const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
+    e.preventDefault(); // 🚨 ESSENCIAL
     setLoading(true);
-    setErr(null);
+    setError(null);
 
-    const fd = new FormData(e.currentTarget);
-    const email = String(fd.get("email") ?? "").trim();
-    const password = String(fd.get("password") ?? "");
+    const formData = new FormData(e.currentTarget);
+    const email = String(formData.get("email") ?? "").trim();
+    const password = String(formData.get("password") ?? "");
 
     const res = await signIn("credentials", {
       redirect: false,
@@ -30,18 +40,21 @@ export function SignInForm() {
 
     setLoading(false);
 
-    if (!res?.ok) {
-      setErr("E-mail ou senha inválidos.");
+    if (!res || !res.ok) {
+      setError("E-mail ou senha inválidos.");
       return;
     }
 
-    // decide o destino no server (tenant/owner)
+    // ✅ redirecionamento controlado pelo backend
     router.push("/api/post-login");
   }
 
+  // ⛔ impede submit antes do JS estar ativo
+  if (!mounted) return null;
+
   return (
-    <div style={{ display: "grid", gap: 10, marginTop: 16 }}>
-      {created ? (
+    <div style={{ display: "grid", gap: 12, marginTop: 16 }}>
+      {created && (
         <div
           style={{
             padding: 10,
@@ -51,22 +64,45 @@ export function SignInForm() {
             fontSize: 14,
           }}
         >
-          Usuário criado com sucesso.
+          Usuário criado com sucesso. Faça login abaixo.
         </div>
-      ) : null}
+      )}
 
       <form onSubmit={onSubmit} style={{ display: "grid", gap: 12 }}>
-        <input name="email" type="email" placeholder="Email" required />
-        <input name="password" type="password" placeholder="Senha" required />
+        <input
+          name="email"
+          type="email"
+          placeholder="E-mail"
+          required
+          autoComplete="email"
+        />
+
+        <input
+          name="password"
+          type="password"
+          placeholder="Senha"
+          required
+          autoComplete="current-password"
+        />
 
         <button type="submit" disabled={loading}>
           {loading ? "Entrando..." : "Entrar"}
         </button>
 
-        {err ? <p style={{ color: "crimson", margin: 0 }}>{err}</p> : null}
+        {error && (
+          <p style={{ color: "crimson", margin: 0 }}>{error}</p>
+        )}
       </form>
 
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", fontSize: 14, opacity: 0.85 }}>
+      <div
+        style={{
+          display: "flex",
+          gap: 10,
+          flexWrap: "wrap",
+          fontSize: 14,
+          opacity: 0.85,
+        }}
+      >
         <a href="/auth/sign-up">Criar conta</a>
         <span>•</span>
         <a href="/auth/forgot-password">Esqueci minha senha</a>
