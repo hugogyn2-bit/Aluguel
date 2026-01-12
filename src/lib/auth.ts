@@ -6,88 +6,74 @@ import { z } from "zod";
 
 const credsSchema = z.object({
   email: z.string().email(),
-  password: z.string().min(6),
+  password: z.string().min(1), // ⚠️ relaxado só para diagnóstico
 });
 
 export const authOptions: NextAuthOptions = {
+  debug: true, // 🔥 MUITO IMPORTANTE
   session: { strategy: "jwt" },
   pages: { signIn: "/auth/sign-in" },
   providers: [
     CredentialsProvider({
-      name: "Email e Senha",
+      id: "credentials", // ⚠️ força o ID correto
+      name: "Credentials",
       credentials: {
-        email: { label: "Email" },
+        email: { label: "Email", type: "text" },
         password: { label: "Senha", type: "password" },
       },
       async authorize(credentials) {
-        const parsed = credsSchema.safeParse(credentials);
-        if (!parsed.success) return null;
+        console.log("👉 AUTHORIZE CHAMADO");
+        console.log("CREDENTIALS:", credentials);
 
-        const { email, password } = parsed.data;
-        const emailNorm = email.trim();
+        if (!credentials?.email || !credentials?.password) {
+          console.log("❌ Credenciais vazias");
+          return null;
+        }
 
-        // ✅ BUSCA CASE-INSENSITIVE (resolve e-mail salvo com maiúsculas no passado)
+        const email = credentials.email.toLowerCase().trim();
+        const password = credentials.password;
+
+        console.log("EMAIL NORMALIZADO:", email);
+
         const user = await prisma.user.findFirst({
           where: {
             email: {
-              equals: emailNorm,
+              equals: email,
               mode: "insensitive",
             },
           },
         });
 
+        console.log("USUÁRIO ENCONTRADO:", user ? "SIM" : "NÃO");
+
         if (!user) return null;
 
         const ok = await bcrypt.compare(password, user.passwordHash);
+        console.log("SENHA CONFERE:", ok);
+
         if (!ok) return null;
+
+        console.log("✅ LOGIN OK");
 
         return {
           id: user.id,
           email: user.email,
-          name: user.name ?? undefined,
           role: user.role,
-          ownerPaid: (user as any).ownerPaid,
-        } as any;
+        };
       },
     }),
   ],
   callbacks: {
     async jwt({ token, user }) {
-      // on login
       if (user) {
-        token.uid = (user as any).id;
-        (token as any).id = (user as any).id;
+        token.id = (user as any).id;
         token.role = (user as any).role;
-        token.ownerPaid = (user as any).ownerPaid;
       }
-
-      // refresh from db
-      if (token?.uid) {
-        const dbUser = await prisma.user.findUnique({
-          where: { id: token.uid as string },
-        });
-
-        if (dbUser) {
-          (token as any).id = dbUser.id;
-          token.role = dbUser.role;
-          token.ownerPaid = (dbUser as any).ownerPaid;
-          (token as any).mustChangePassword = (dbUser as any).mustChangePassword;
-          (token as any).trialEndsAt = (dbUser as any).trialEndsAt
-            ? (dbUser as any).trialEndsAt.toISOString()
-            : undefined;
-          token.email = dbUser.email;
-          token.name = dbUser.name ?? undefined;
-        }
-      }
-
       return token;
     },
     async session({ session, token }) {
-      (session.user as any).id = (token as any).id ?? (token as any).uid;
+      (session.user as any).id = token.id;
       (session.user as any).role = token.role;
-      (session.user as any).ownerPaid = token.ownerPaid;
-      (session.user as any).trialEndsAt = (token as any).trialEndsAt;
-      (session.user as any).mustChangePassword = (token as any).mustChangePassword;
       return session;
     },
   },
