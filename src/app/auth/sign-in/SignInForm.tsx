@@ -8,7 +8,7 @@ export function SignInForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // 🔒 Garante que o formulário só exista após hidratação
+  // 🔒 impede qualquer submit antes da hidratação
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -23,12 +23,11 @@ export function SignInForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault(); // 🚨 ESSENCIAL
+  async function handleLogin(form: HTMLFormElement) {
     setLoading(true);
     setError(null);
 
-    const formData = new FormData(e.currentTarget);
+    const formData = new FormData(form);
     const email = String(formData.get("email") ?? "").trim();
     const password = String(formData.get("password") ?? "");
 
@@ -45,11 +44,11 @@ export function SignInForm() {
       return;
     }
 
-    // ✅ redirecionamento controlado pelo backend
+    // ✅ decisão final no backend
     router.push("/api/post-login");
   }
 
-  // ⛔ impede submit antes do JS estar ativo
+  // ⛔ nada renderiza antes do JS
   if (!mounted) return null;
 
   return (
@@ -68,24 +67,42 @@ export function SignInForm() {
         </div>
       )}
 
-      <form onSubmit={onSubmit} style={{ display: "grid", gap: 12 }}>
+      {/* 🚨 FORMULÁRIO BLINDADO */}
+      <form
+        noValidate
+        onSubmit={(e) => {
+          e.preventDefault();
+          handleLogin(e.currentTarget);
+        }}
+        style={{ display: "grid", gap: 12 }}
+      >
         <input
           name="email"
           type="email"
           placeholder="E-mail"
-          required
           autoComplete="email"
+          required
         />
 
         <input
           name="password"
           type="password"
           placeholder="Senha"
-          required
           autoComplete="current-password"
+          required
         />
 
-        <button type="submit" disabled={loading}>
+        {/* 🚨 BOTÃO NÃO SUBMIT */}
+        <button
+          type="button"
+          disabled={loading}
+          onClick={(e) => {
+            const form = (e.currentTarget as HTMLButtonElement).form;
+            if (form) {
+              handleLogin(form);
+            }
+          }}
+        >
           {loading ? "Entrando..." : "Entrar"}
         </button>
 
