@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { SignInForm } from "./SignInForm";
 
 export default function SignInPage() {
@@ -5,7 +6,10 @@ export default function SignInPage() {
     <main className="min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-md space-y-6">
         <h1 className="text-3xl font-bold">Login</h1>
-        <SignInForm />
+
+        <Suspense fallback={null}>
+          <SignInForm />
+        </Suspense>
       </div>
     </main>
   );
