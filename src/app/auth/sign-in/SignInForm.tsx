@@ -2,7 +2,7 @@
 
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 export function SignInForm() {
   const router = useRouter();
@@ -59,7 +59,6 @@ export function SignInForm() {
         placeholder="E-mail"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
-        autoComplete="email"
       />
 
       <input
@@ -67,7 +66,6 @@ export function SignInForm() {
         placeholder="Senha"
         value={password}
         onChange={(e) => setPassword(e.target.value)}
-        autoComplete="current-password"
       />
 
       <button onClick={handleLogin} disabled={loading}>
@@ -76,7 +74,7 @@ export function SignInForm() {
 
       {error && <p style={{ color: "crimson" }}>{error}</p>}
 
-      <div style={{ fontSize: 14, opacity: 0.85 }}>
+      <div style={{ fontSize: 14 }}>
         <a href="/auth/sign-up">Criar conta</a> •{" "}
         <a href="/auth/forgot-password">Esqueci minha senha</a>
       </div>
