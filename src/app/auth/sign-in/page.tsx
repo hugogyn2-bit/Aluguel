@@ -4,20 +4,18 @@ import { signIn } from "next-auth/react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Button } from "@/components/Button";
 
 export default function SignInPage() {
   const router = useRouter();
-
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setLoading(true);
+    e.preventDefault(); // 🚨 ESSENCIAL
     setError(null);
+    setLoading(true);
 
     const res = await signIn("credentials", {
       email,
@@ -36,42 +34,47 @@ export default function SignInPage() {
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center px-5">
+    <main className="min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-md space-y-6">
-        <h1 className="text-3xl font-black tracking-tight">Login</h1>
+        <h1 className="text-3xl font-bold">Login</h1>
 
-        {error && <p className="text-sm text-red-500">{error}</p>}
+        {error && <p className="text-red-500 text-sm">{error}</p>}
 
+        {/* 🚨 SEM action */}
         <form onSubmit={handleSubmit} className="space-y-4">
           <input
-            className="w-full rounded-xl border px-4 py-3"
             type="email"
             placeholder="E-mail"
+            className="w-full border rounded px-3 py-2"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
           />
 
           <input
-            className="w-full rounded-xl border px-4 py-3"
             type="password"
             placeholder="Senha"
+            className="w-full border rounded px-3 py-2"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
           />
 
-          <Button type="submit" disabled={loading} className="w-full">
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-black text-white py-2 rounded"
+          >
             {loading ? "Entrando..." : "Entrar"}
-          </Button>
+          </button>
         </form>
 
-        <div className="text-center space-y-2">
-          <Link href="/auth/sign-up" className="text-sm underline">
+        <div className="text-sm text-center space-y-2">
+          <Link href="/auth/sign-up" className="underline">
             Criar conta
           </Link>
           <br />
-          <Link href="/auth/forgot-password" className="text-sm underline">
+          <Link href="/auth/forgot-password" className="underline">
             Esqueci minha senha
           </Link>
         </div>
