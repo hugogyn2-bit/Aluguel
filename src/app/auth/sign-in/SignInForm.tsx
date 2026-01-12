@@ -8,28 +8,19 @@ export function SignInForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // 🔒 impede qualquer submit antes da hidratação
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
   const created = useMemo(
     () => searchParams.get("created") === "1",
     [searchParams]
   );
 
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function handleLogin(form: HTMLFormElement) {
+  async function handleLogin() {
     setLoading(true);
     setError(null);
-
-    const formData = new FormData(form);
-    const email = String(formData.get("email") ?? "").trim();
-    const password = String(formData.get("password") ?? "");
 
     const res = await signIn("credentials", {
       redirect: false,
@@ -44,12 +35,8 @@ export function SignInForm() {
       return;
     }
 
-    // ✅ decisão final no backend
     router.push("/api/post-login");
   }
-
-  // ⛔ nada renderiza antes do JS
-  if (!mounted) return null;
 
   return (
     <div style={{ display: "grid", gap: 12, marginTop: 16 }}>
@@ -67,61 +54,30 @@ export function SignInForm() {
         </div>
       )}
 
-      {/* 🚨 FORMULÁRIO BLINDADO */}
-      <form
-        noValidate
-        onSubmit={(e) => {
-          e.preventDefault();
-          handleLogin(e.currentTarget);
-        }}
-        style={{ display: "grid", gap: 12 }}
-      >
-        <input
-          name="email"
-          type="email"
-          placeholder="E-mail"
-          autoComplete="email"
-          required
-        />
+      <input
+        type="email"
+        placeholder="E-mail"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        autoComplete="email"
+      />
 
-        <input
-          name="password"
-          type="password"
-          placeholder="Senha"
-          autoComplete="current-password"
-          required
-        />
+      <input
+        type="password"
+        placeholder="Senha"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        autoComplete="current-password"
+      />
 
-        {/* 🚨 BOTÃO NÃO SUBMIT */}
-        <button
-          type="button"
-          disabled={loading}
-          onClick={(e) => {
-            const form = (e.currentTarget as HTMLButtonElement).form;
-            if (form) {
-              handleLogin(form);
-            }
-          }}
-        >
-          {loading ? "Entrando..." : "Entrar"}
-        </button>
+      <button onClick={handleLogin} disabled={loading}>
+        {loading ? "Entrando..." : "Entrar"}
+      </button>
 
-        {error && (
-          <p style={{ color: "crimson", margin: 0 }}>{error}</p>
-        )}
-      </form>
+      {error && <p style={{ color: "crimson" }}>{error}</p>}
 
-      <div
-        style={{
-          display: "flex",
-          gap: 10,
-          flexWrap: "wrap",
-          fontSize: 14,
-          opacity: 0.85,
-        }}
-      >
-        <a href="/auth/sign-up">Criar conta</a>
-        <span>•</span>
+      <div style={{ fontSize: 14, opacity: 0.85 }}>
+        <a href="/auth/sign-up">Criar conta</a> •{" "}
         <a href="/auth/forgot-password">Esqueci minha senha</a>
       </div>
     </div>
