@@ -1,8 +1,14 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+input, textarea, select {
+  background-color: #ffffff !important;
+  color: #000000 !important;
+  border: 1px solid #999 !important;
+  padding: 12px !important;
+  border-radius: 10px !important;
+}
 
-:root { color-scheme: dark; }
-
-html, body { height: 100%; }
-body { background: theme(colors.bg); color: theme(colors.text); }
+button {
+  background-color: #000000 !important;
+  color: #ffffff !important;
+  padding: 12px !important;
+  border-radius: 10px !important;
+}
