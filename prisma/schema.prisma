@@ -55,4 +55,15 @@ model TenantProfile {
   ownerId   String
   owner     User     @relation("OwnerTenants", fields: [ownerId], references: [id], onDelete: Cascade)
 
-  // 🧾 dad
+  // 🧾 dados do inquilino
+  fullName  String
+  cpf       String   @unique
+  rg        String
+  address   String
+  cep       String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ownerId])
+}
