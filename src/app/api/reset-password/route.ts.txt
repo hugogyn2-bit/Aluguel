@@ -1,0 +1,66 @@
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import bcrypt from "bcryptjs";
+
+export async function POST(req: Request) {
+  try {
+    const body = await req.json();
+    const { token, password } = body as { token: string; password: string };
+
+    if (!token || !password) {
+      return NextResponse.json(
+        { message: "Token e senha são obrigatórios." },
+        { status: 400 }
+      );
+    }
+
+    if (password.length < 6) {
+      return NextResponse.json(
+        { message: "A senha precisa ter no mínimo 6 caracteres." },
+        { status: 400 }
+      );
+    }
+
+    // ⚠️ Aqui depende do seu schema:
+    // Você precisa ter uma tabela/campo que armazena o token de reset.
+    // Vou assumir que você tem algo tipo: resetToken e resetTokenExpires
+    const user = await prisma.user.findFirst({
+      where: {
+        resetToken: token,
+      },
+    });
+
+    if (!user) {
+      return NextResponse.json(
+        { message: "Token inválido." },
+        { status: 400 }
+      );
+    }
+
+    // Se você tiver expiração:
+    if (user.resetTokenExpires && user.resetTokenExpires < new Date()) {
+      return NextResponse.json(
+        { message: "Token expirado. Solicite novamente." },
+        { status: 400 }
+      );
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordHash,
+        resetToken: null,
+        resetTokenExpires: null,
+      },
+    });
+
+    return NextResponse.json({ message: "Senha atualizada com sucesso!" });
+  } catch (err) {
+    return NextResponse.json(
+      { message: "Erro interno ao redefinir senha." },
+      { status: 500 }
+    );
+  }
+}

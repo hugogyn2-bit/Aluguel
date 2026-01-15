@@ -1,76 +1,91 @@
 "use client";
 
-import { useState } from "react";
-import { Button } from "@/components/Button";
 import Link from "next/link";
+import { useState } from "react";
+import AuthCard from "@/components/auth/AuthCard";
+import AuthInput from "@/components/auth/AuthInput";
+import AuthButton from "@/components/auth/AuthButton";
 
 export default function ForgotPasswordPage() {
-  const [email, setEmail] = useState("");
-  const [birthDate, setBirthDate] = useState("");
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleForgot(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    setErrorMsg("");
+    setSuccessMsg("");
     setLoading(true);
-    setError(null);
-    setMessage(null);
 
-    const res = await fetch("/api/auth/forgot-password", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ email, birthDate }),
-    });
+    const formData = new FormData(e.currentTarget);
+    const email = String(formData.get("email") || "");
 
-    setLoading(false);
+    try {
+      const res = await fetch("/api/auth/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
 
-    if (!res.ok) {
       const data = await res.json().catch(() => null);
-      setError(data?.error ?? "Erro ao verificar dados.");
-      return;
-    }
 
-    setMessage("Dados confirmados. Continue para redefinir sua senha.");
+      if (!res.ok) {
+        setLoading(false);
+        setErrorMsg(data?.message || "Não foi possível enviar o link.");
+        return;
+      }
+
+      setLoading(false);
+      setSuccessMsg("Se o email existir, enviamos o link ✅");
+    } catch {
+      setLoading(false);
+      setErrorMsg("Erro inesperado. Tente novamente.");
+    }
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center px-5">
-      <div className="w-full max-w-md space-y-6">
-        <h1 className="text-3xl font-black tracking-tight">Esqueci minha senha</h1>
-
-        {error && <p className="text-sm text-red-500">{error}</p>}
-        {message && <p className="text-sm text-green-600">{message}</p>}
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <input
-            className="w-full rounded-xl border px-4 py-3"
-            type="email"
-            placeholder="E-mail"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
-
-          <input
-            className="w-full rounded-xl border px-4 py-3"
-            type="date"
-            value={birthDate}
-            onChange={(e) => setBirthDate(e.target.value)}
-            required
-          />
-
-          <Button type="submit" disabled={loading} className="w-full">
-            {loading ? "Verificando..." : "Continuar"}
-          </Button>
-        </form>
-
-        <div className="text-center">
-          <Link href="/auth/sign-in" className="text-sm underline">
-            Voltar para login
+    <AuthCard
+      title="Esqueci minha senha"
+      subtitle="Digite seu email para receber o link ✨"
+      badgeTitle="Recuperação"
+      badgeSubtitle="Reset de senha"
+      footer={
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-white/60">Lembrou?</span>
+          <Link
+            href="/auth/sign-in"
+            className="font-semibold text-cyan-300 hover:text-cyan-200"
+          >
+            Voltar pro login →
           </Link>
         </div>
-      </div>
-    </main>
+      }
+    >
+      <form onSubmit={handleForgot} className="space-y-4">
+        <AuthInput
+          label="Email"
+          name="email"
+          type="email"
+          required
+          placeholder="seu@email.com"
+        />
+
+        {errorMsg ? (
+          <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+            {errorMsg}
+          </div>
+        ) : null}
+
+        {successMsg ? (
+          <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
+            {successMsg}
+          </div>
+        ) : null}
+
+        <AuthButton loading={loading} loadingText="Enviando...">
+          Enviar link
+        </AuthButton>
+      </form>
+    </AuthCard>
   );
 }

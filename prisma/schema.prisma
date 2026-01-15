@@ -30,6 +30,10 @@ model User {
   // ✅ Força troca de senha no primeiro login (TENANT)
   mustChangePassword Boolean @default(false)
 
+  // 🔐 Reset de senha por token (link enviado por email)
+  resetPasswordToken   String?
+  resetPasswordExpires DateTime?
+
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -51,15 +55,4 @@ model TenantProfile {
   ownerId   String
   owner     User     @relation("OwnerTenants", fields: [ownerId], references: [id], onDelete: Cascade)
 
-  // 🧾 dados do inquilino
-  fullName  String
-  cpf       String   @unique
-  rg        String
-  address   String
-  cep       String
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([ownerId])
-}
+  // 🧾 dad
