@@ -1,14 +1,28 @@
-import { Suspense } from "react";
-import { SignInForm } from "./SignInForm";
+"use client";
+
+import { signIn } from "next-auth/react";
 
 export default function SignInPage() {
-  return (
-    <main style={{ maxWidth: 420, margin: "0 auto", padding: 24 }}>
-      <h1>Login</h1>
+  async function handleLogin(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
 
-      <Suspense fallback={null}>
-        <SignInForm />
-      </Suspense>
-    </main>
+    const formData = new FormData(e.currentTarget);
+    const email = String(formData.get("email"));
+    const password = String(formData.get("password"));
+
+    await signIn("credentials", {
+      email,
+      password,
+      redirect: true,
+      callbackUrl: "/",
+    });
+  }
+
+  return (
+    <form onSubmit={handleLogin}>
+      <input name="email" />
+      <input name="password" type="password" />
+      <button type="submit">Entrar</button>
+    </form>
   );
 }
