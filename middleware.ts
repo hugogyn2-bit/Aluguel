@@ -10,16 +10,15 @@ const PUBLIC_PATHS = [
 ];
 
 const PUBLIC_API_PATHS = [
+  "/api/auth", // ✅ LIBERA NEXTAUTH INTEIRO
   "/api/auth/sign-up",
   "/api/auth/forgot-password",
   "/api/auth/reset-password",
-  "/api/auth/[...nextauth]",
 ];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // ✅ libera arquivos estáticos
   if (
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon") ||
@@ -28,12 +27,10 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // ✅ libera páginas públicas
   if (PUBLIC_PATHS.some((path) => pathname.startsWith(path))) {
     return NextResponse.next();
   }
 
-  // ✅ libera APIs públicas
   if (PUBLIC_API_PATHS.some((path) => pathname.startsWith(path))) {
     return NextResponse.next();
   }
@@ -43,12 +40,10 @@ export async function middleware(req: NextRequest) {
     secret: process.env.NEXTAUTH_SECRET,
   });
 
-  // ❌ não autenticado → login
   if (!token) {
     return NextResponse.redirect(new URL("/auth/sign-in", req.url));
   }
 
-  // 🔐 controle por role
   if (pathname.startsWith("/owner") && token.role !== "OWNER") {
     return NextResponse.redirect(new URL("/tenant", req.url));
   }
