@@ -1,18 +1,17 @@
-import type { ReactNode } from "react";
-import AuthBackground from "@/components/auth/AuthBackground";
+import "./globals.css";
+import type { Metadata } from "next";
 
-export default function AuthLayout({ children }: { children: ReactNode }) {
+export const metadata: Metadata = {
+  title: "Aluga — Inquilino & Proprietário",
+  description: "App completo com login e paywall para modo proprietário.",
+};
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="relative min-h-screen flex items-center justify-center px-4 bg-black text-white overflow-hidden">
-      {/* ✅ background nunca pega clique */}
-      <div className="pointer-events-none absolute inset-0">
-        <AuthBackground />
-      </div>
-
-      {/* ✅ conteúdo sempre clicável */}
-      <div className="relative z-10 w-full flex justify-center">
+    <html lang="pt-BR">
+      <body className="min-h-screen bg-black text-white">
         {children}
-      </div>
-    </div>
+      </body>
+    </html>
   );
 }
