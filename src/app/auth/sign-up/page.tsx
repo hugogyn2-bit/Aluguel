@@ -3,107 +3,104 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+
 import AuthCard from "@/components/auth/AuthCard";
 import AuthInput from "@/components/auth/AuthInput";
 import AuthButton from "@/components/auth/AuthButton";
+import NeonLogo from "@/components/auth/NeonLogo";
 
 export default function SignUpPage() {
   const router = useRouter();
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [birthDate, setBirthDate] = useState("");
   const [loading, setLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState("");
-  const [successMsg, setSuccessMsg] = useState("");
+  const [msg, setMsg] = useState("");
 
-  async function handleSignUp(e: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setErrorMsg("");
-    setSuccessMsg("");
     setLoading(true);
-
-    const formData = new FormData(e.currentTarget);
-    const name = String(formData.get("name") || "");
-    const email = String(formData.get("email") || "");
-    const password = String(formData.get("password") || "");
+    setMsg("");
 
     try {
       const res = await fetch("/api/auth/sign-up", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password }),
+        body: JSON.stringify({ email, password, birthDate }),
       });
 
-      const data = await res.json().catch(() => null);
+      const data = await res.json();
 
       if (!res.ok) {
+        setMsg(data?.error || "Erro ao criar conta.");
         setLoading(false);
-        setErrorMsg(data?.message || "Erro ao criar conta.");
         return;
       }
 
-      setLoading(false);
-      setSuccessMsg("Conta criada! Indo pro login... ✅");
-
-      setTimeout(() => {
-        router.push("/auth/sign-in");
-      }, 900);
+      setMsg("✅ Conta criada! Indo para o login...");
+      setTimeout(() => router.push("/auth/sign-in"), 1200);
     } catch {
+      setMsg("Erro interno. Tente novamente.");
+    } finally {
       setLoading(false);
-      setErrorMsg("Erro inesperado. Tente novamente.");
     }
   }
 
   return (
-    <AuthCard
-      title="Criar conta"
-      subtitle="Preencha os dados para começar ✨"
-      badgeTitle="Cadastro"
-      badgeSubtitle="Novo acesso"
-      footer={
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-white/60">Já tem conta?</span>
-          <Link
-            href="/auth/sign-in"
-            className="font-semibold text-cyan-300 hover:text-cyan-200"
-          >
-            Voltar pro login →
-          </Link>
-        </div>
-      }
-    >
-      <form onSubmit={handleSignUp} className="space-y-4">
-        <AuthInput label="Nome" name="name" required placeholder="Seu nome" />
+    <AuthCard>
+      <div className="flex flex-col items-center gap-3 mb-6">
+        <NeonLogo />
+        <h1 className="text-2xl font-bold text-white">Criar Conta</h1>
+        <p className="text-sm text-white/60 text-center">
+          Cadastre-se como <span className="text-cyan-300">OWNER</span> para gerenciar seus imóveis.
+        </p>
+      </div>
 
+      <form onSubmit={handleSubmit} className="space-y-4">
         <AuthInput
           label="Email"
-          name="email"
           type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="seuemail@gmail.com"
           required
-          placeholder="seu@email.com"
         />
 
         <AuthInput
-          label="Senha"
-          name="password"
+          label="Senha (mínimo 6 caracteres)"
           type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="********"
           required
-          placeholder="Crie uma senha"
         />
 
-        {errorMsg ? (
-          <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
-            {errorMsg}
-          </div>
-        ) : null}
+        {/* ✅ ESSENCIAL (Sua API exige isso) */}
+        <AuthInput
+          label="Data de nascimento (segurança)"
+          type="date"
+          value={birthDate}
+          onChange={(e) => setBirthDate(e.target.value)}
+          required
+        />
 
-        {successMsg ? (
-          <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
-            {successMsg}
+        {msg && (
+          <div className="text-sm text-white/80 bg-white/5 border border-white/10 rounded-xl p-3">
+            {msg}
           </div>
-        ) : null}
+        )}
 
-        <AuthButton loading={loading} loadingText="Criando...">
-          Criar conta
+        <AuthButton type="submit" disabled={loading}>
+          {loading ? "Criando..." : "Criar conta"}
         </AuthButton>
       </form>
+
+      <div className="mt-6 text-center">
+        <Link className="text-sm text-cyan-300 hover:underline" href="/auth/sign-in">
+          Já tenho conta → Login
+        </Link>
+      </div>
     </AuthCard>
   );
 }
