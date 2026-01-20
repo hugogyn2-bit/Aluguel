@@ -3,7 +3,7 @@ import NeonLogo from "@/components/auth/NeonLogo";
 
 type Props = {
   title: string;
-  subtitle?: ReactNode; // ✅ aqui!
+  subtitle?: ReactNode;
   badgeTitle?: string;
   badgeSubtitle?: string;
   children: ReactNode;

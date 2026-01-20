@@ -1,43 +1,87 @@
-// src/app/api/pay/owner/start/route.ts
 import { NextResponse } from "next/server";
-import { getToken } from "next-auth/jwt";
+import Stripe from "stripe";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 
-// ✅ GET: usado quando o usuário clica em um <a href="..."> (browser abre por GET)
-export async function GET(req: Request) {
-  const token = await getToken({ req: req as any, secret: process.env.NEXTAUTH_SECRET });
+export async function POST() {
+  const session = await getServerSession(authOptions);
 
-  if (!token) {
-    return NextResponse.redirect(new URL("/auth/sign-in?role=OWNER", req.url));
-  }
-  if (token.role !== "OWNER") {
-    return NextResponse.redirect(new URL("/tenant", req.url));
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
   }
 
-  const url =
-    process.env.MERCADOPAGO_CHECKOUT_URL ||
-    process.env.NEXT_PUBLIC_MERCADOPAGO_CHECKOUT_URL ||
-    "https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=a3d9c55a69aa4d69b1345e1f1469d632";
+  const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+  const priceId = process.env.STRIPE_PRICE_ID; // ✅ preco mensal R$29,90
 
-  return NextResponse.redirect(url);
-}
-
-export async function POST(req: Request) {
-  try {
-    const token = await getToken({ req: req as any, secret: process.env.NEXTAUTH_SECRET });
-
-    if (!token) return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
-    if (token.role !== "OWNER") return NextResponse.json({ error: "Somente OWNER" }, { status: 403 });
-
-    const url =
-      process.env.MERCADOPAGO_CHECKOUT_URL ||
-      process.env.NEXT_PUBLIC_MERCADOPAGO_CHECKOUT_URL ||
-      "https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=a3d9c55a69aa4d69b1345e1f1469d632";
-
-    return NextResponse.json({ url });
-  } catch (e) {
-    console.error(e);
-    return NextResponse.json({ error: "Erro interno" }, { status: 500 });
+  if (!stripeSecretKey || !priceId) {
+    return NextResponse.json(
+      { error: "Stripe não configurado (SECRET_KEY ou PRICE_ID)" },
+      { status: 500 }
+    );
   }
+
+  const stripe = new Stripe(stripeSecretKey, {
+    apiVersion: "2024-06-20",
+  });
+
+  const user = await prisma.user.findUnique({
+    where: { email: session.user.email },
+  });
+
+  if (!user) {
+    return NextResponse.json({ error: "Usuário não encontrado" }, { status: 404 });
+  }
+
+  if (user.role !== "OWNER") {
+    return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
+  }
+
+  // ✅ urls do seu sistema
+  const baseUrl =
+    process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+
+  // ✅ cria customer se não tiver
+  let customerId = user.stripeCustomerId;
+
+  if (!customerId) {
+    const customer = await stripe.customers.create({
+      email: user.email,
+      metadata: {
+        userId: user.id,
+      },
+    });
+
+    customerId = customer.id;
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        stripeCustomerId: customerId,
+      },
+    });
+  }
+
+  // ✅ Checkout subscription
+  const checkoutSession = await stripe.checkout.sessions.create({
+    mode: "subscription",
+    customer: customerId,
+    line_items: [
+      {
+        price: priceId,
+        quantity: 1,
+      },
+    ],
+    success_url: `${baseUrl}/owner?success=1`,
+    cancel_url: `${baseUrl}/owner?canceled=1`,
+
+    // ✅ ESSENCIAL pro webhook saber quem atualizar
+    metadata: {
+      userId: user.id,
+    },
+  });
+
+  return NextResponse.json({ url: checkoutSession.url });
 }

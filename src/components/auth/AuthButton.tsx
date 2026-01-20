@@ -36,7 +36,6 @@ export default function AuthButton({
       <span className="relative z-10">
         {loading ? <SpinnerNeon text={loadingText} /> : children}
       </span>
-
       <span className="absolute inset-0 opacity-30 blur-xl bg-white" />
     </button>
   );

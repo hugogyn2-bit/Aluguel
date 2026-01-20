@@ -27,7 +27,9 @@ export default function SignInPage() {
       email,
       password,
       redirect: false,
-      callbackUrl: "/owner", // ✅ TROQUE AQUI
+
+      // ✅ AQUI você troca pra onde vai depois do login
+      callbackUrl: "/",
     });
 
     setLoading(false);
@@ -37,8 +39,7 @@ export default function SignInPage() {
       return;
     }
 
-    // ✅ se login OK, redireciona para o callbackUrl
-    window.location.href = res?.url || "/owner";
+    window.location.href = "/";
   }
 
   return (
@@ -77,11 +78,7 @@ export default function SignInPage() {
         />
 
         <div className="flex items-center justify-between gap-3">
-          <AuthToggle
-            checked={remember}
-            onChange={setRemember}
-            label="Lembrar de mim"
-          />
+          <AuthToggle checked={remember} onChange={setRemember} label="Lembrar de mim" />
 
           <Link
             href="/auth/forgot-password"

@@ -1,7 +1,9 @@
+"use client";
+
 type Props = {
   checked: boolean;
-  onChange: (value: boolean) => void;
-  label: string;
+  onChange: (v: boolean) => void;
+  label?: string;
 };
 
 export default function AuthToggle({ checked, onChange, label }: Props) {
@@ -9,26 +11,20 @@ export default function AuthToggle({ checked, onChange, label }: Props) {
     <button
       type="button"
       onClick={() => onChange(!checked)}
-      className="flex items-center gap-3 text-sm text-white/70 select-none"
-      aria-pressed={checked}
+      className="inline-flex items-center gap-2 text-sm text-white/70 hover:text-white transition"
     >
       <span
-        className={`relative h-6 w-11 rounded-full border transition ${
-          checked
-            ? "border-cyan-300/40 bg-cyan-400/20 shadow-[0_0_20px_rgba(34,211,238,0.25)]"
-            : "border-white/15 bg-white/5"
+        className={`relative h-5 w-9 rounded-full border border-white/10 transition ${
+          checked ? "bg-cyan-500/60" : "bg-white/10"
         }`}
       >
         <span
-          className={`absolute top-1/2 h-5 w-5 -translate-y-1/2 rounded-full transition ${
-            checked
-              ? "left-[22px] bg-gradient-to-r from-cyan-300 via-fuchsia-300 to-purple-300 shadow-[0_0_18px_rgba(34,211,238,0.35)]"
-              : "left-[2px] bg-white/40"
+          className={`absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full bg-white transition ${
+            checked ? "left-4" : "left-1"
           }`}
         />
       </span>
-
-      <span className="font-medium">{label}</span>
+      {label ? <span>{label}</span> : null}
     </button>
   );
 }

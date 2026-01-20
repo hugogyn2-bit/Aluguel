@@ -34,7 +34,6 @@ export default function SignUpPage() {
 
       if (!res.ok) {
         setMsg(data?.error || "Erro ao criar conta.");
-        setLoading(false);
         return;
       }
 
@@ -100,10 +99,7 @@ export default function SignUpPage() {
       </form>
 
       <div className="mt-6 text-center">
-        <Link
-          className="text-sm text-cyan-300 hover:underline"
-          href="/auth/sign-in"
-        >
+        <Link className="text-sm text-cyan-300 hover:underline" href="/auth/sign-in">
           Já tenho conta → Login
         </Link>
       </div>

@@ -1,12 +1,3 @@
-generator client {
-  provider = "prisma-client-js"
-}
-
-datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-}
-
 enum Role {
   TENANT
   OWNER
@@ -20,50 +11,35 @@ model User {
 
   role         Role     @default(TENANT)
 
-  // Premium
-  ownerPaid    Boolean  @default(false)
-  trialEndsAt  DateTime?
+  // ✅ Trial (24h)
+  trialEndsAt     DateTime?
+  trialStartedAt  DateTime?
 
-  // ✅ Segurança extra (somente OWNER) – usada para reset de senha
+  // ✅ Premium interno do app
+  ownerPaid       Boolean   @default(false)
+  premiumStartedAt DateTime?
+
+  // ✅ Stripe
+  stripeCustomerId       String?  @unique
+  stripeSubscriptionId   String?  @unique
+  stripePriceId          String?
+  stripeStatus           String?  // active, trialing, canceled, past_due...
+  currentPeriodEnd       DateTime?
+  cancelAtPeriodEnd      Boolean  @default(false)
+
+  // ✅ Segurança extra (somente OWNER)
   birthDate    DateTime?
 
-  // ✅ Força troca de senha no primeiro login (TENANT)
+  // ✅ TENANT troca senha no primeiro login
   mustChangePassword Boolean @default(false)
 
-  // 🔐 Reset de senha por token (link enviado por email)
+  // 🔐 Reset de senha por token
   resetPasswordToken   String?
   resetPasswordExpires DateTime?
 
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  // ✅ Se esse usuário for TENANT, terá um perfil
   tenantProfile TenantProfile? @relation("TenantUser")
-
-  // ✅ Se esse usuário for OWNER, poderá ter vários tenants vinculados
   ownedTenants  TenantProfile[] @relation("OwnerTenants")
-}
-
-model TenantProfile {
-  id        String   @id @default(cuid())
-
-  // 🔗 vínculo com TENANT (User)
-  userId    String   @unique
-  user      User     @relation("TenantUser", fields: [userId], references: [id], onDelete: Cascade)
-
-  // 🔗 vínculo com OWNER (User) que criou o TENANT
-  ownerId   String
-  owner     User     @relation("OwnerTenants", fields: [ownerId], references: [id], onDelete: Cascade)
-
-  // 🧾 dados do inquilino
-  fullName  String
-  cpf       String   @unique
-  rg        String
-  address   String
-  cep       String
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([ownerId])
 }

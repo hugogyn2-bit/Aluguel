@@ -1,25 +1,36 @@
 import { NextResponse } from "next/server";
-import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/prisma";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
-export async function POST(req: Request) {
-  try {
-    const token = await getToken({ req: req as any, secret: process.env.NEXTAUTH_SECRET });
+export async function GET() {
+  const session = await getServerSession(authOptions);
 
-    if (!token) return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
-    if (token.role !== "OWNER") return NextResponse.json({ error: "Somente OWNER" }, { status: 403 });
-
-    // ✅ MOCK: libera premium no banco
-    await prisma.user.update({
-      where: { id: String((token as any).id) },
-      data: { ownerPaid: true },
-    });
-
-    return NextResponse.json({ ok: true });
-  } catch (e) {
-    console.error(e);
-    return NextResponse.json({ error: "Erro interno" }, { status: 500 });
+  if (!session?.user?.email) {
+    return NextResponse.json({ ok: false, allowed: false }, { status: 401 });
   }
+
+  const user = await prisma.user.findUnique({
+    where: { email: session.user.email },
+  });
+
+  if (!user) {
+    return NextResponse.json({ ok: false, allowed: false }, { status: 404 });
+  }
+
+  const now = new Date();
+  const hasTrial = user.trialEndsAt && user.trialEndsAt > now;
+
+  const allowed = user.ownerPaid || Boolean(hasTrial);
+
+  return NextResponse.json({
+    ok: true,
+    allowed,
+    ownerPaid: user.ownerPaid,
+    trialEndsAt: user.trialEndsAt,
+    stripeStatus: user.stripeStatus,
+    cancelAtPeriodEnd: user.cancelAtPeriodEnd,
+  });
 }
