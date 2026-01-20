@@ -34,11 +34,11 @@ export async function POST(req: Request) {
       );
     }
 
-    const exists = await prisma.user.findUnique({
+    const existingUser = await prisma.user.findUnique({
       where: { email },
     });
 
-    if (exists) {
+    if (existingUser) {
       return NextResponse.json(
         { error: "E-mail já cadastrado." },
         { status: 400 }
