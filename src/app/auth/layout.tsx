@@ -3,11 +3,9 @@ import AuthBackground from "@/components/auth/AuthBackground";
 
 export default function AuthLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="relative min-h-screen overflow-hidden bg-black text-white">
+    <div className="relative min-h-screen flex items-center justify-center px-4">
       <AuthBackground />
-      <div className="relative z-10 flex min-h-screen items-center justify-center p-4">
-        {children}
-      </div>
+      <div className="w-full max-w-md relative z-10">{children}</div>
     </div>
   );
 }

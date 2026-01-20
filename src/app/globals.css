@@ -1,43 +1,73 @@
+/* ===========================
+   FUNDO HACKER NEON
+=========================== */
+
+@keyframes floaty {
+  0% { transform: translateY(0px) translateX(0px); }
+  50% { transform: translateY(-14px) translateX(10px); }
+  100% { transform: translateY(0px) translateX(0px); }
+}
+
+/* Grid respirando */
+@keyframes gridPulse {
+  0% { opacity: 0.10; transform: translateY(0px); }
+  50% { opacity: 0.22; transform: translateY(-10px); }
+  100% { opacity: 0.10; transform: translateY(0px); }
+}
+
+.neon-grid {
+  animation: gridPulse 6s ease-in-out infinite;
+}
+
+/* Neon sweep beams */
+@keyframes neonSweep {
+  0% { transform: translateX(-120%) skewX(-20deg); opacity: 0; }
+  15% { opacity: 0.45; }
+  50% { opacity: 0.12; }
+  100% { transform: translateX(120%) skewX(-20deg); opacity: 0; }
+}
+
 .neon-sweep {
   position: absolute;
-  top: -30%;
-  left: -60%;
-  width: 60%;
-  height: 160%;
-  transform: rotate(18deg);
+  top: 0;
+  bottom: 0;
+  width: 35%;
   filter: blur(18px);
-  opacity: 0.35;
+  opacity: 0;
+  animation: neonSweep 5.2s linear infinite;
+}
+
+.neon-sweep-1 {
+  left: 0;
   background: linear-gradient(
-    90deg,
+    to right,
     transparent,
-    rgba(34, 211, 238, 0.35),
-    rgba(232, 121, 249, 0.35),
+    rgba(34, 211, 238, 0.45),
     transparent
   );
-  animation: sweep 3.6s linear infinite;
+  animation-delay: 0s;
 }
 
 .neon-sweep-2 {
-  top: -50%;
-  transform: rotate(24deg);
-  animation-duration: 4.8s;
-  opacity: 0.28;
+  left: 0;
+  width: 45%;
+  background: linear-gradient(
+    to right,
+    transparent,
+    rgba(217, 70, 239, 0.40),
+    transparent
+  );
+  animation-delay: 1.6s;
 }
 
 .neon-sweep-3 {
-  top: -10%;
-  transform: rotate(14deg);
-  animation-duration: 5.8s;
-  opacity: 0.22;
-}
-
-@keyframes sweep {
-  0% { left: -80%; }
-  100% { left: 140%; }
-}
-
-@keyframes floaty {
-  0% { transform: translateY(0px); opacity: 0.18; }
-  50% { transform: translateY(-18px); opacity: 0.35; }
-  100% { transform: translateY(0px); opacity: 0.18; }
+  left: 0;
+  width: 55%;
+  background: linear-gradient(
+    to right,
+    transparent,
+    rgba(168, 85, 247, 0.35),
+    transparent
+  );
+  animation-delay: 3.2s;
 }

@@ -1,36 +1,30 @@
-type Props = {
+"use client";
+
+import React from "react";
+
+type Props = React.InputHTMLAttributes<HTMLInputElement> & {
   label: string;
-  name: string;
-  type?: string;
-  placeholder?: string;
-  required?: boolean;
-  error?: string;
 };
 
-export default function AuthInput({
-  label,
-  name,
-  type = "text",
-  placeholder,
-  required = false,
-  error,
-}: Props) {
+export default function AuthInput({ label, className = "", ...props }: Props) {
   return (
-    <div>
-      <label className="text-xs text-white/70">{label}</label>
+    <div className="space-y-2">
+      <label className="text-sm text-white/70">{label}</label>
 
       <input
-        name={name}
-        type={type}
-        required={required}
-        placeholder={placeholder}
-        className={`mt-1 w-full rounded-xl border bg-black/40 px-4 py-3 text-white outline-none transition
-          ${error ? "border-red-500/40" : "border-white/10"}
-          focus:border-cyan-400/50 focus:shadow-[0_0_0_3px_rgba(34,211,238,0.15)]
-        `}
+        {...props}
+        className={[
+          "w-full rounded-xl px-4 py-3",
+          "bg-white/5 border border-white/10",
+          "text-white placeholder:text-white/30",
+          "outline-none",
+          "focus:border-cyan-400/60 focus:ring-2 focus:ring-cyan-400/20",
+          "transition",
+          // ✅ deixa o date bonito no dark
+          "color-scheme-dark",
+          className,
+        ].join(" ")}
       />
-
-      {error ? <div className="mt-2 text-xs text-red-200">{error}</div> : null}
     </div>
   );
 }
