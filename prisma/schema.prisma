@@ -1,3 +1,12 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
 enum Role {
   TENANT
   OWNER
@@ -12,18 +21,18 @@ model User {
   role         Role     @default(TENANT)
 
   // ✅ Trial (24h)
-  trialEndsAt     DateTime?
-  trialStartedAt  DateTime?
+  trialEndsAt      DateTime?
+  trialStartedAt   DateTime?
 
   // ✅ Premium interno do app
-  ownerPaid       Boolean   @default(false)
-  premiumStartedAt DateTime?
+  ownerPaid         Boolean   @default(false)
+  premiumStartedAt  DateTime?
 
   // ✅ Stripe
   stripeCustomerId       String?  @unique
   stripeSubscriptionId   String?  @unique
   stripePriceId          String?
-  stripeStatus           String?  // active, trialing, canceled, past_due...
+  stripeStatus           String?
   currentPeriodEnd       DateTime?
   cancelAtPeriodEnd      Boolean  @default(false)
 
@@ -40,6 +49,33 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  // ✅ Se esse usuário for TENANT, terá um perfil
   tenantProfile TenantProfile? @relation("TenantUser")
+
+  // ✅ Se esse usuário for OWNER, poderá ter vários tenants vinculados
   ownedTenants  TenantProfile[] @relation("OwnerTenants")
+}
+
+model TenantProfile {
+  id        String   @id @default(cuid())
+
+  // 🔗 vínculo com TENANT (User)
+  userId    String   @unique
+  user      User     @relation("TenantUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  // 🔗 vínculo com OWNER (User) que criou o TENANT
+  ownerId   String
+  owner     User     @relation("OwnerTenants", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  // 🧾 dados do inquilino
+  fullName  String
+  cpf       String   @unique
+  rg        String
+  address   String
+  cep       String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ownerId])
 }
