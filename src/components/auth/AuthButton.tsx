@@ -1,3 +1,25 @@
+import type { ReactNode } from "react";
+
+type Props = {
+  children: ReactNode;
+  loading?: boolean;
+  disabled?: boolean;
+  loadingText?: string;
+  type?: "button" | "submit";
+};
+
+function SpinnerNeon({ text }: { text: string }) {
+  return (
+    <div className="inline-flex items-center gap-2">
+      <span className="relative flex h-4 w-4">
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-cyan-400 opacity-35" />
+        <span className="relative inline-flex h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-cyan-300" />
+      </span>
+      <span>{text}</span>
+    </div>
+  );
+}
+
 export default function AuthButton({
   children,
   loading = false,
@@ -15,8 +37,7 @@ export default function AuthButton({
         {loading ? <SpinnerNeon text={loadingText} /> : children}
       </span>
 
-      ✅ {/* ISSO AQUI PRECISA */}
-      <span className="pointer-events-none absolute inset-0 opacity-30 blur-xl bg-white" />
+      <span className="absolute inset-0 opacity-30 blur-xl bg-white" />
     </button>
   );
 }
