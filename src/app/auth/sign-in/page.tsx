@@ -27,7 +27,7 @@ export default function SignInPage() {
       email,
       password,
       redirect: false,
-      callbackUrl: "/",
+      callbackUrl: "/owner", // ✅ TROQUE AQUI
     });
 
     setLoading(false);
@@ -37,8 +37,8 @@ export default function SignInPage() {
       return;
     }
 
-    // ✅ login ok
-    window.location.href = "/";
+    // ✅ se login OK, redireciona para o callbackUrl
+    window.location.href = res?.url || "/owner";
   }
 
   return (
