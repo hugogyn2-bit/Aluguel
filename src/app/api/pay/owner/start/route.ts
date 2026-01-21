@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import Stripe from "stripe";
 import { getServerSession } from "next-auth";
+import Stripe from "stripe";
+
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -14,71 +15,97 @@ export async function POST() {
       return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     }
 
-    const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL;
-    const priceId = process.env.STRIPE_PRICE_ID;
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+    });
 
+    if (!user) {
+      return NextResponse.json({ error: "Usuário não encontrado" }, { status: 404 });
+    }
+
+    if (user.role !== "OWNER") {
+      return NextResponse.json({ error: "Apenas OWNER pode assinar" }, { status: 403 });
+    }
+
+    const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
     if (!stripeSecretKey) {
+      console.error("❌ STRIPE_SECRET_KEY não configurada");
       return NextResponse.json(
         { error: "STRIPE_SECRET_KEY não configurada" },
         { status: 500 }
       );
     }
 
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL;
     if (!appUrl) {
+      console.error("❌ NEXT_PUBLIC_APP_URL não configurada");
       return NextResponse.json(
         { error: "NEXT_PUBLIC_APP_URL não configurada" },
         { status: 500 }
       );
     }
 
+    const priceId = process.env.STRIPE_PRICE_ID;
     if (!priceId) {
+      console.error("❌ STRIPE_PRICE_ID não configurada");
       return NextResponse.json(
         { error: "STRIPE_PRICE_ID não configurada" },
         { status: 500 }
       );
     }
 
-    // ✅ IMPORTANTE: não colocar apiVersion aqui (evita erro TS)
     const stripe = new Stripe(stripeSecretKey);
 
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-    });
+    // ✅ se ainda não tem customer no Stripe, cria e salva no banco
+    let stripeCustomerId = user.stripeCustomerId;
 
-    if (!user || user.role !== "OWNER") {
-      return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
-    }
-
-    // ✅ cria customer se não existir
-    let customerId = user.stripeCustomerId;
-
-    if (!customerId) {
+    if (!stripeCustomerId) {
       const customer = await stripe.customers.create({
         email: user.email,
-        metadata: { userId: user.id },
+        name: user.name ?? undefined,
+        metadata: {
+          userId: user.id,
+          role: user.role,
+        },
       });
 
-      customerId = customer.id;
+      stripeCustomerId = customer.id;
 
       await prisma.user.update({
         where: { id: user.id },
-        data: { stripeCustomerId: customerId },
+        data: { stripeCustomerId },
       });
     }
 
-    // ✅ cria checkout subscription
-    const checkout = await stripe.checkout.sessions.create({
+    // ✅ Checkout Session (Subscription mensal)
+    const checkoutSession = await stripe.checkout.sessions.create({
       mode: "subscription",
-      customer: customerId,
-      line_items: [{ price: priceId, quantity: 1 }],
-      success_url: `${appUrl}/owner?payment=success`,
-      cancel_url: `${appUrl}/paywall?payment=cancelled`,
+      customer: stripeCustomerId,
+
+      line_items: [
+        {
+          price: priceId,
+          quantity: 1,
+        },
+      ],
+
+      // ✅ importante: fazer o Stripe aceitar promoções/cupom se quiser
+      allow_promotion_codes: true,
+
+      // ✅ redirects
+      success_url: `${appUrl}/owner?paid=1`,
+      cancel_url: `${appUrl}/owner/premium?cancel=1`,
+
+      // ✅ salva userId pra webhook usar com segurança
+      metadata: {
+        userId: user.id,
+      },
     });
 
-    return NextResponse.json({ url: checkout.url });
-  } catch (err) {
-    console.error("CHECKOUT ERROR:", err);
+    return NextResponse.json({ url: checkoutSession.url });
+  } catch (err: any) {
+    console.error("❌ Erro interno ao iniciar pagamento:", err?.message || err);
+
     return NextResponse.json(
       { error: "Erro interno ao iniciar pagamento" },
       { status: 500 }
