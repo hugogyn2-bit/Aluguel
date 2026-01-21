@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import Stripe from "stripe";
-import { getServerSession } from "next-auth";
+import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import Stripe from "stripe";
 
 export const runtime = "nodejs";
 
@@ -14,53 +14,41 @@ export async function POST() {
       return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     }
 
-    const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL;
-
-    if (!stripeSecretKey) {
-      return NextResponse.json(
-        { error: "STRIPE_SECRET_KEY não configurada" },
-        { status: 500 }
-      );
-    }
-
-    if (!appUrl) {
-      return NextResponse.json(
-        { error: "NEXT_PUBLIC_APP_URL não configurada" },
-        { status: 500 }
-      );
-    }
-
-    // ✅ IMPORTANTE: não colocar apiVersion aqui (evita erro TS)
-    const stripe = new Stripe(stripeSecretKey);
-
     const user = await prisma.user.findUnique({
       where: { email: session.user.email },
     });
 
-    if (!user || user.role !== "OWNER") {
-      return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
+    if (!user) {
+      return NextResponse.json({ error: "Usuário não encontrado" }, { status: 404 });
     }
 
     if (!user.stripeCustomerId) {
       return NextResponse.json(
-        { error: "Usuário sem Stripe Customer" },
+        { error: "Cliente Stripe não encontrado. Faça a assinatura primeiro." },
         { status: 400 }
       );
     }
 
-    // ✅ Customer Portal (cancelar / gerenciar assinatura)
+    if (!process.env.STRIPE_SECRET_KEY) {
+      return NextResponse.json({ error: "STRIPE_SECRET_KEY não configurada" }, { status: 500 });
+    }
+
+    if (!process.env.NEXT_PUBLIC_APP_URL) {
+      return NextResponse.json({ error: "NEXT_PUBLIC_APP_URL não configurada" }, { status: 500 });
+    }
+
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+      apiVersion: "2025-02-24.acacia",
+    });
+
     const portalSession = await stripe.billingPortal.sessions.create({
       customer: user.stripeCustomerId,
-      return_url: `${appUrl}/owner`,
+      return_url: `${process.env.NEXT_PUBLIC_APP_URL}/owner`,
     });
 
     return NextResponse.json({ url: portalSession.url });
-  } catch (err) {
+  } catch (err: any) {
     console.error("PORTAL ERROR:", err);
-    return NextResponse.json(
-      { error: "Erro interno ao abrir portal" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Erro interno ao abrir portal" }, { status: 500 });
   }
 }
