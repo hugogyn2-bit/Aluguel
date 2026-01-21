@@ -16,7 +16,6 @@ export async function POST() {
 
     const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
     const appUrl = process.env.NEXT_PUBLIC_APP_URL;
-    const priceId = process.env.STRIPE_PRICE_ID;
 
     if (!stripeSecretKey) {
       return NextResponse.json(
@@ -32,14 +31,7 @@ export async function POST() {
       );
     }
 
-    if (!priceId) {
-      return NextResponse.json(
-        { error: "STRIPE_PRICE_ID não configurada" },
-        { status: 500 }
-      );
-    }
-
-    // ✅ NÃO define apiVersion (evita erro TS)
+    // ✅ IMPORTANTE: não colocar apiVersion aqui (evita erro TS)
     const stripe = new Stripe(stripeSecretKey);
 
     const user = await prisma.user.findUnique({
@@ -50,39 +42,24 @@ export async function POST() {
       return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
     }
 
-    // ✅ cria customer se não existir
-    let customerId = user.stripeCustomerId;
-
-    if (!customerId) {
-      const customer = await stripe.customers.create({
-        email: user.email,
-        metadata: { userId: user.id },
-      });
-
-      customerId = customer.id;
-
-      await prisma.user.update({
-        where: { id: user.id },
-        data: {
-          stripeCustomerId: customerId,
-        },
-      });
+    if (!user.stripeCustomerId) {
+      return NextResponse.json(
+        { error: "Usuário sem Stripe Customer" },
+        { status: 400 }
+      );
     }
 
-    // ✅ cria checkout
-    const checkout = await stripe.checkout.sessions.create({
-      mode: "subscription",
-      customer: customerId,
-      line_items: [{ price: priceId, quantity: 1 }],
-      success_url: `${appUrl}/owner?payment=success`,
-      cancel_url: `${appUrl}/paywall?payment=cancelled`,
+    // ✅ Customer Portal (cancelar / gerenciar assinatura)
+    const portalSession = await stripe.billingPortal.sessions.create({
+      customer: user.stripeCustomerId,
+      return_url: `${appUrl}/owner`,
     });
 
-    return NextResponse.json({ url: checkout.url });
+    return NextResponse.json({ url: portalSession.url });
   } catch (err) {
-    console.error("CHECKOUT ERROR:", err);
+    console.error("PORTAL ERROR:", err);
     return NextResponse.json(
-      { error: "Erro interno ao iniciar pagamento" },
+      { error: "Erro interno ao abrir portal" },
       { status: 500 }
     );
   }
