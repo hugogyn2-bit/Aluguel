@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 
@@ -12,43 +12,38 @@ export async function POST() {
     return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
   }
 
-  const user = await prisma.user.findUnique({
+  const owner = await prisma.user.findUnique({
     where: { email: session.user.email },
   });
 
-  if (!user) {
-    return NextResponse.json({ error: "Usuário não encontrado" }, { status: 404 });
-  }
-
-  if (user.role !== "OWNER") {
+  if (!owner || owner.role !== "OWNER") {
     return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
   }
 
   const now = new Date();
 
-  // ✅ se já tem premium
-  if (user.ownerPaid) {
+  // ✅ já tem premium
+  if (owner.ownerPaid) {
     return NextResponse.json({
       ok: true,
-      message: "Você já é PREMIUM ✅",
-      trialEndsAt: user.trialEndsAt,
+      message: "Você já é Premium ✅",
     });
   }
 
-  // ✅ se trial ainda está ativo
-  if (user.trialEndsAt && user.trialEndsAt > now) {
+  // ✅ já tem trial ativo
+  if (owner.trialEndsAt && owner.trialEndsAt > now) {
     return NextResponse.json({
       ok: true,
-      message: "Seu TRIAL ainda está ativo ✅",
-      trialEndsAt: user.trialEndsAt,
+      message: "Trial já está ativo ✅",
+      trialEndsAt: owner.trialEndsAt,
     });
   }
 
-  // ✅ inicia trial de 24h
+  // ✅ inicia 24 horas a partir de agora
   const trialEndsAt = new Date(now.getTime() + 24 * 60 * 60 * 1000);
 
   await prisma.user.update({
-    where: { id: user.id },
+    where: { id: owner.id },
     data: {
       trialStartedAt: now,
       trialEndsAt,
@@ -57,7 +52,7 @@ export async function POST() {
 
   return NextResponse.json({
     ok: true,
-    message: "🎉 Trial ativado por 24 horas!",
+    message: "Trial ativado por 24 horas ✅",
     trialEndsAt,
   });
 }

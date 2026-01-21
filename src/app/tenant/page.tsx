@@ -1,56 +1,103 @@
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import Link from "next/link";
-import { LogOut, Receipt, FileText, Wrench, Megaphone } from "lucide-react";
-import { Button } from "@/components/Button";
+import { getServerSession } from "next-auth";
+import { redirect } from "next/navigation";
 
-export default async function Page() {
+import { authOptions } from "@/lib/auth";
+
+import { LogOut, Receipt, FileText, Wrench, Megaphone } from "lucide-react";
+
+export default async function TenantPage() {
   const session = await getServerSession(authOptions);
-  const email = session?.user?.email ?? "Inquilino";
+
+  if (!session?.user) {
+    redirect("/auth/sign-in");
+  }
 
   return (
-    <main className="mx-auto max-w-3xl px-5 py-10">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <div className="text-2xl font-black tracking-tight">Área do Inquilino</div>
-          <div className="text-sm text-muted mt-1">Olá, {email}</div>
+    <div className="min-h-screen px-6 py-10">
+      <div className="mx-auto max-w-5xl">
+        <div className="mb-10 flex items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-extrabold tracking-tight">
+              Área do Inquilino
+            </h1>
+            <p className="text-white/60 mt-1">
+              Bem-vindo, <span className="text-cyan-300">{session.user.email}</span>
+            </p>
+          </div>
+
+          <Link
+            href="/api/auth/signout"
+            className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/80 hover:bg-white/10"
+          >
+            <LogOut size={18} />
+            Sair
+          </Link>
         </div>
 
-        <form action="/api/signout" method="post">
-          <Button variant="outline" type="submit">
-            <LogOut className="h-4 w-4" /> Sair
-          </Button>
-        </form>
-      </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <Card
+            title="Meus boletos"
+            desc="Acesse e acompanhe pagamentos do aluguel."
+            icon={<Receipt size={18} />}
+            href="#"
+          />
+          <Card
+            title="Documentos"
+            desc="Contrato, recibos e arquivos importantes."
+            icon={<FileText size={18} />}
+            href="#"
+          />
+          <Card
+            title="Manutenção"
+            desc="Abra solicitações e acompanhe status."
+            icon={<Wrench size={18} />}
+            href="#"
+          />
+          <Card
+            title="Avisos"
+            desc="Comunicados do proprietário e do imóvel."
+            icon={<Megaphone size={18} />}
+            href="#"
+          />
+        </div>
 
-      <div className="mt-8 grid gap-4">
-        <Feature title="Boletos" subtitle="Ver e pagar" Icon={Receipt} />
-        <Feature title="Contrato" subtitle="Consultar documentos" Icon={FileText} />
-        <Feature title="Chamados" subtitle="Abrir solicitações" Icon={Wrench} />
-        <Feature title="Avisos" subtitle="Comunicados do imóvel" Icon={Megaphone} />
+        <div className="mt-10 rounded-2xl border border-white/10 bg-white/5 p-6">
+          <h2 className="text-lg font-bold">Status</h2>
+          <p className="text-white/60 mt-1">
+            Seu acesso como inquilino está ativo ✅
+          </p>
+        </div>
       </div>
-
-      <div className="mt-10 text-sm text-muted">
-        Quer testar o modo proprietário?{" "}
-        <Link className="underline hover:text-text" href="/auth/sign-in?role=OWNER">
-          Entrar como Proprietário
-        </Link>
-      </div>
-    </main>
+    </div>
   );
 }
 
-function Feature({ title, subtitle, Icon }: { title: string; subtitle: string; Icon: any }) {
+function Card({
+  title,
+  desc,
+  icon,
+  href,
+}: {
+  title: string;
+  desc: string;
+  icon: React.ReactNode;
+  href: string;
+}) {
   return (
-    <div className="rounded-3xl bg-surface/90 border border-white/10 p-6 flex items-center gap-4">
-      <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-secondary/85 to-primary/50 grid place-items-center">
-        <Icon className="h-5 w-5" />
+    <Link
+      href={href}
+      className="group rounded-2xl border border-white/10 bg-white/5 p-5 transition hover:bg-white/10"
+    >
+      <div className="flex items-center gap-3">
+        <div className="grid h-10 w-10 place-items-center rounded-xl bg-cyan-500/15 text-cyan-300">
+          {icon}
+        </div>
+        <div>
+          <div className="font-bold text-white/90">{title}</div>
+          <div className="text-sm text-white/60">{desc}</div>
+        </div>
       </div>
-      <div className="flex-1">
-        <div className="font-extrabold tracking-tight">{title}</div>
-        <div className="text-sm text-muted mt-1">{subtitle}</div>
-      </div>
-      <div className="text-muted">›</div>
-    </div>
+    </Link>
   );
 }

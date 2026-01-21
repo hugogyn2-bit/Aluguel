@@ -1,22 +1,21 @@
 import type { Config } from "tailwindcss";
 
-export default {
-  content: ["./src/**/*.{ts,tsx}"],
+const config: Config = {
+  content: [
+    "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
+    "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
+    "./src/lib/**/*.{js,ts,jsx,tsx,mdx}"
+  ],
   theme: {
     extend: {
       colors: {
-        bg: "#0B1020",
-        surface: "#121A33",
-        text: "#E8EAF6",
-        muted: "#B6B9D6",
-        primary: "#6D28D9",
-        secondary: "#06B6D4",
-        accent: "#F97316"
-      },
-      boxShadow: {
-        glow: "0 10px 40px rgba(109, 40, 217, 0.25)"
+        primary: "#22d3ee",
+        secondary: "#a855f7",
+        accent: "#ec4899"
       }
     }
   },
   plugins: []
-} satisfies Config;
+};
+
+export default config;
