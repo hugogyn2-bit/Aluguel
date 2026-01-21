@@ -74,6 +74,10 @@ model TenantProfile {
   address   String
   cep       String
 
+  // ✅ NOVOS CAMPOS (pra bater com seu formulário)
+  email     String   @unique
+  birthDate DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
