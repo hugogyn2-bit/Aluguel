@@ -22,10 +22,8 @@ export default function OwnerPremiumPage() {
       }
 
       setMsg(data?.message || "Trial iniciado ✅");
-
-      // ✅ pode mandar pra /owner ou /owner/dashboard se existir
       setTimeout(() => {
-        window.location.href = "/owner";
+        window.location.href = "/owner/dashboard";
       }, 1200);
     } catch {
       setMsg("Erro interno no trial.");
@@ -49,10 +47,7 @@ export default function OwnerPremiumPage() {
 
       if (data?.url) {
         window.location.href = data.url;
-        return;
       }
-
-      setMsg("Não foi possível abrir o checkout.");
     } catch {
       setMsg("Erro interno no pagamento.");
     } finally {
@@ -85,7 +80,6 @@ export default function OwnerPremiumPage() {
     <div className="min-h-screen bg-black text-white flex items-center justify-center px-4">
       <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur-xl">
         <h1 className="text-2xl font-extrabold">Premium OWNER</h1>
-
         <p className="mt-2 text-white/70">
           Para cadastrar inquilinos e liberar recursos do proprietário, você
           precisa de acesso premium.
@@ -105,9 +99,7 @@ export default function OwnerPremiumPage() {
             disabled={loadingPay}
             className="w-full rounded-xl bg-gradient-to-r from-cyan-500 via-fuchsia-500 to-purple-600 px-4 py-3 font-semibold hover:opacity-95 disabled:opacity-60"
           >
-            {loadingPay
-              ? "Abrindo pagamento..."
-              : "💳 Assinar Premium (R$ 29,90/mês)"}
+            {loadingPay ? "Abrindo pagamento..." : "💳 Assinar Premium (R$ 29,90/mês)"}
           </button>
 
           <button

@@ -1,53 +1,43 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
-import { prisma } from "@/lib/prisma";
 
 export async function middleware(req: NextRequest) {
   const pathname = req.nextUrl.pathname;
 
-  // ✅ aqui você coloca as rotas que quer proteger pelo paywall
+  // ✅ rotas que exigem login (e OWNER)
   const protectedOwnerRoutes = [
     "/owner/tenants/create",
     "/owner/tenants",
     "/owner/dashboard",
+    "/owner/settings",
   ];
 
   const isProtected = protectedOwnerRoutes.some((p) => pathname.startsWith(p));
 
   if (!isProtected) return NextResponse.next();
 
+  // ✅ pega token do NextAuth (EDGE safe)
   const token = await getToken({
     req,
     secret: process.env.NEXTAUTH_SECRET,
   });
 
-  if (!token?.sub) {
+  // ✅ não logou
+  if (!token?.email) {
     return NextResponse.redirect(new URL("/auth/sign-in", req.url));
   }
 
-  const user = await prisma.user.findUnique({
-    where: { id: token.sub },
-  });
+  // ✅ aqui você pode validar role se ela estiver no token
+  // (só funciona se você colocar "role" no token no NextAuth callbacks)
+  const role = (token as any)?.role;
 
-  if (!user) {
-    return NextResponse.redirect(new URL("/auth/sign-in", req.url));
-  }
-
-  if (user.role !== "OWNER") {
+  if (role && role !== "OWNER") {
     return NextResponse.redirect(new URL("/", req.url));
   }
 
-  const now = new Date();
-
-  const hasPremium =
-    user.stripeStatus === "active" ||
-    user.stripeStatus === "trialing" ||
-    (user.trialEndsAt && user.trialEndsAt > now);
-
-  if (!hasPremium) {
-    return NextResponse.redirect(new URL("/owner/premium?blocked=1", req.url));
-  }
+  // ✅ Paywall NÃO FAZEMOS no middleware pq não dá pra consultar DB aqui
+  // O paywall você controla nas rotas /api ou pages server-side.
 
   return NextResponse.next();
 }
