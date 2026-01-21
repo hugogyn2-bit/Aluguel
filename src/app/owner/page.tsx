@@ -11,42 +11,72 @@ export default function OwnerPage() {
   async function refreshStatus() {
     setLoading(true);
 
-    const res = await fetch("/api/pay/owner/verify");
-    const data = await res.json();
+    try {
+      const res = await fetch("/api/pay/owner/verify", { cache: "no-store" });
+      const data = await res.json();
 
-    setAllowed(data.allowed);
-    setOwnerPaid(data.ownerPaid);
-    setTrialEndsAt(data.trialEndsAt ? new Date(data.trialEndsAt).toLocaleString() : null);
+      if (!res.ok) {
+        setAllowed(false);
+        setOwnerPaid(false);
+        setTrialEndsAt(null);
+        setLoading(false);
+        return;
+      }
 
-    setLoading(false);
+      setAllowed(Boolean(data.allowed));
+      setOwnerPaid(Boolean(data.ownerPaid));
+      setTrialEndsAt(
+        data.trialEndsAt ? new Date(data.trialEndsAt).toLocaleString() : null
+      );
+    } catch {
+      setAllowed(false);
+      setOwnerPaid(false);
+      setTrialEndsAt(null);
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function startTrial() {
-    const res = await fetch("/api/owner/trial/start", { method: "POST" });
-    const data = await res.json();
-    alert(data.message || "Trial processado");
-    await refreshStatus();
+    try {
+      const res = await fetch("/api/owner/trial/start", { method: "POST" });
+      const data = await res.json();
+      alert(data.message || "Trial processado");
+      await refreshStatus();
+    } catch {
+      alert("Erro interno ao ativar trial.");
+    }
   }
 
   async function goPremium() {
-    const res = await fetch("/api/pay/owner/start", { method: "POST" });
-    const data = await res.json();
+    try {
+      const res = await fetch("/api/pay/owner/start", { method: "POST" });
+      const data = await res.json();
 
-    if (data.url) {
-      window.location.href = data.url;
-    } else {
-      alert(data.error || "Erro ao iniciar pagamento");
+      if (data?.url) {
+        window.location.href = data.url;
+        return;
+      }
+
+      alert(data?.error || "Erro ao iniciar pagamento");
+    } catch {
+      alert("Erro interno ao iniciar premium.");
     }
   }
 
   async function openPortal() {
-    const res = await fetch("/api/pay/owner/portal", { method: "POST" });
-    const data = await res.json();
+    try {
+      const res = await fetch("/api/pay/owner/portal", { method: "POST" });
+      const data = await res.json();
 
-    if (data.url) {
-      window.location.href = data.url;
-    } else {
-      alert(data.error || "Erro ao abrir portal");
+      if (data?.url) {
+        window.location.href = data.url;
+        return;
+      }
+
+      alert(data?.error || "Erro ao abrir portal");
+    } catch {
+      alert("Erro interno ao abrir portal.");
     }
   }
 
@@ -56,14 +86,14 @@ export default function OwnerPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center text-white">
+      <div className="min-h-screen flex items-center justify-center text-white bg-black">
         Carregando...
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen px-6 py-12 text-white">
+    <div className="min-h-screen px-6 py-12 text-white bg-black">
       <div className="mx-auto max-w-3xl rounded-2xl border border-white/10 bg-white/5 p-8 backdrop-blur-xl">
         <h1 className="text-3xl font-extrabold mb-3">Área do Proprietário</h1>
 
@@ -72,7 +102,9 @@ export default function OwnerPage() {
           {allowed ? (
             <span className="text-green-300 font-semibold">✅ Liberado</span>
           ) : (
-            <span className="text-red-300 font-semibold">❌ Bloqueado (Paywall)</span>
+            <span className="text-red-300 font-semibold">
+              ❌ Bloqueado (Paywall)
+            </span>
           )}
         </p>
 
@@ -102,7 +134,7 @@ export default function OwnerPage() {
               onClick={openPortal}
               className="rounded-xl px-4 py-3 bg-red-500/20 border border-red-500/30 hover:bg-red-500/25"
             >
-              ⚠️ Cancelar assinatura
+              ⚙️ Gerenciar / Cancelar assinatura
             </button>
           ) : null}
         </div>
