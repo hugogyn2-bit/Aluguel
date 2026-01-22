@@ -5,39 +5,37 @@ import { getToken } from "next-auth/jwt";
 export async function middleware(req: NextRequest) {
   const pathname = req.nextUrl.pathname;
 
-  // ✅ rotas que exigem login (e OWNER)
-  const protectedOwnerRoutes = [
-    "/owner/tenants/create",
-    "/owner/tenants",
-    "/owner/dashboard",
-    "/owner/settings",
+  // ✅ libera arquivos estáticos e rotas públicas
+  const publicPaths = [
+    "/",
+    "/favicon.ico",
+    "/robots.txt",
+    "/sitemap.xml",
   ];
 
-  const isProtected = protectedOwnerRoutes.some((p) => pathname.startsWith(p));
+  const isPublic =
+    publicPaths.includes(pathname) ||
+    pathname.startsWith("/_next") ||
+    pathname.startsWith("/api/auth") ||
+    pathname.startsWith("/auth");
 
-  if (!isProtected) return NextResponse.next();
-
-  // ✅ pega token do NextAuth (EDGE safe)
-  const token = await getToken({
-    req,
-    secret: process.env.NEXTAUTH_SECRET,
-  });
-
-  // ✅ não logou
-  if (!token?.email) {
-    return NextResponse.redirect(new URL("/auth/sign-in", req.url));
+  if (isPublic) {
+    return NextResponse.next();
   }
 
-  // ✅ aqui você pode validar role se ela estiver no token
-  // (só funciona se você colocar "role" no token no NextAuth callbacks)
-  const role = (token as any)?.role;
+  // ✅ tudo que for /owner precisa estar logado
+  if (pathname.startsWith("/owner")) {
+    const token = await getToken({
+      req,
+      secret: process.env.NEXTAUTH_SECRET,
+    });
 
-  if (role && role !== "OWNER") {
-    return NextResponse.redirect(new URL("/", req.url));
+    if (!token) {
+      return NextResponse.redirect(new URL("/auth/sign-in", req.url));
+    }
+
+    return NextResponse.next();
   }
-
-  // ✅ Paywall NÃO FAZEMOS no middleware pq não dá pra consultar DB aqui
-  // O paywall você controla nas rotas /api ou pages server-side.
 
   return NextResponse.next();
 }

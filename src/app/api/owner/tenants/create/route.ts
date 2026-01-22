@@ -20,47 +20,55 @@ export async function POST(req: Request) {
     });
 
     if (!owner) {
-      return NextResponse.json({ error: "Usuário não encontrado" }, { status: 404 });
+      return NextResponse.json({ error: "OWNER não encontrado" }, { status: 404 });
     }
 
     if (owner.role !== "OWNER") {
-      return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
+      return NextResponse.json(
+        { error: "Sem permissão (apenas OWNER)" },
+        { status: 403 }
+      );
     }
 
-    // ✅ PAYWALL: só deixa cadastrar se tiver trial ou premium
+    // ✅ Paywall (trial/premium)
     const now = new Date();
-    const allowed =
-      owner.ownerPaid === true || (owner.trialEndsAt && owner.trialEndsAt > now);
+    const hasTrial = owner.trialEndsAt && owner.trialEndsAt > now;
+
+    const hasPremiumStripe =
+      owner.stripeStatus === "active" ||
+      owner.stripeStatus === "trialing" ||
+      owner.ownerPaid === true;
+
+    const allowed = Boolean(hasTrial || hasPremiumStripe);
 
     if (!allowed) {
       return NextResponse.json(
-        { error: "❌ Sem acesso. Ative o Trial ou vire Premium." },
+        { error: "❌ Sem acesso (paywall). Ative o Trial ou vire Premium." },
         { status: 403 }
       );
     }
 
     const body = await req.json();
 
-    const fullName = String(body?.name || "").trim();
+    const fullName = String(body?.fullName || "").trim();
     const email = String(body?.email || "").trim().toLowerCase();
     const address = String(body?.address || "").trim();
     const cep = String(body?.cep || "").trim();
     const cpf = String(body?.cpf || "").trim();
     const rg = String(body?.rg || "").trim();
-    const birthDate = String(body?.birthDate || "").trim(); // YYYY-MM-DD
+    const birthDate = String(body?.birthDate || "").trim();
 
-    if (!fullName || !email || !cpf || !rg || !address || !cep) {
+    if (!fullName || !email || !address || !cep || !cpf || !rg || !birthDate) {
       return NextResponse.json(
-        { error: "Preencha todos os campos obrigatórios." },
+        { error: "Preencha todos os campos." },
         { status: 400 }
       );
     }
 
-    // ✅ cria uma senha temporária
-    const tempPassword = Math.random().toString(36).slice(-10) + "A1!";
-    const passwordHash = await bcrypt.hash(tempPassword, 10);
+    // ✅ senha padrão
+    const passwordHash = await bcrypt.hash("123456", 10);
 
-    // ✅ cria TENANT user + profile
+    // ✅ cria tudo junto (User TENANT + TenantProfile)
     const tenantUser = await prisma.user.create({
       data: {
         email,
@@ -68,6 +76,7 @@ export async function POST(req: Request) {
         passwordHash,
         role: "TENANT",
         mustChangePassword: true,
+        birthDate: new Date(birthDate),
 
         tenantProfile: {
           create: {
@@ -77,8 +86,6 @@ export async function POST(req: Request) {
             rg,
             address,
             cep,
-            email,
-            birthDate: birthDate ? new Date(birthDate) : null,
           },
         },
       },
@@ -88,18 +95,23 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json({
-      message: "✅ Inquilino cadastrado com sucesso!",
-      tenant: tenantUser,
-      tempPassword, // ⚠️ ideal enviar por email, mas por enquanto devolve aqui
+      message: "✅ Inquilino criado com sucesso",
+      tenant: {
+        id: tenantUser.id,
+        email: tenantUser.email,
+        name: tenantUser.name,
+        mustChangePassword: tenantUser.mustChangePassword,
+        profile: tenantUser.tenantProfile,
+      },
     });
   } catch (err: any) {
-    console.error("❌ Erro ao cadastrar inquilino:", err?.message || err);
+    console.error("❌ erro criar tenant:", err?.message || err);
 
-    // Prisma unique error
+    // erros comuns de unique
     if (err?.code === "P2002") {
       return NextResponse.json(
-        { error: "Já existe um inquilino com esse email ou CPF." },
-        { status: 400 }
+        { error: "Email ou CPF já cadastrado." },
+        { status: 409 }
       );
     }
 
