@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
-export default function OwnerPremiumPage() {
+export default function OwnerTrialPage() {
   redirect("/owner");
 }
