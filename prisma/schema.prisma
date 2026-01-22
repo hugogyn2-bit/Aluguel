@@ -36,11 +36,9 @@ model User {
   currentPeriodEnd       DateTime?
   cancelAtPeriodEnd      Boolean  @default(false)
 
-  // ✅ Segurança extra (somente OWNER)
+  // ✅ Segurança extra
   birthDate    DateTime?
-
-  // ✅ CPF para reset e validação
-  cpf          String? @unique
+  cpf          String?  @unique
 
   // ✅ TENANT troca senha no primeiro login
   mustChangePassword Boolean @default(false)
@@ -74,9 +72,11 @@ model TenantProfile {
   fullName  String
   cpf       String   @unique
   rg        String
-  phone     String   // ✅ NOVO CAMPO
   address   String
   cep       String
+
+  // ✅ telefone (AGORA OPCIONAL para não quebrar banco antigo)
+  phone     String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
