@@ -20,6 +20,10 @@ model User {
 
   role         Role     @default(TENANT)
 
+  // ✅ dados extras (para reset e segurança)
+  cpf       String?   @unique
+  birthDate DateTime?
+
   // ✅ Trial (24h)
   trialEndsAt      DateTime?
   trialStartedAt   DateTime?
@@ -35,9 +39,6 @@ model User {
   stripeStatus           String?
   currentPeriodEnd       DateTime?
   cancelAtPeriodEnd      Boolean  @default(false)
-
-  // ✅ Segurança extra (somente OWNER)
-  birthDate    DateTime?
 
   // ✅ TENANT troca senha no primeiro login
   mustChangePassword Boolean @default(false)
@@ -68,13 +69,12 @@ model TenantProfile {
   owner     User     @relation("OwnerTenants", fields: [ownerId], references: [id], onDelete: Cascade)
 
   // 🧾 dados do inquilino
-  fullName  String
-  email     String?  // ✅ AGORA opcional pra não quebrar os registros antigos
-  cpf       String   @unique
-  rg        String
-  birthDate DateTime?
-  address   String
-  cep       String
+  fullName   String
+  cpf        String   @unique
+  rg         String
+  address    String
+  cep        String
+  birthDate  DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
