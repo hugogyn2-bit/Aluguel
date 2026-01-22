@@ -14,8 +14,9 @@ enum Role {
 
 enum ContractStatus {
   DRAFT
-  OWNER_SIGNED
-  TENANT_SIGNED
+  PENDING_SIGNATURES
+  ACTIVE
+  CANCELLED
 }
 
 model User {
@@ -24,27 +25,27 @@ model User {
   name         String?
   passwordHash String
 
-  role         Role     @default(TENANT)
+  role Role @default(TENANT)
+
+  // ✅ CPF + Nascimento (para reset de senha)
+  cpf       String?   @unique
+  birthDate DateTime?
 
   // ✅ Trial (24h)
-  trialEndsAt      DateTime?
-  trialStartedAt   DateTime?
+  trialEndsAt    DateTime?
+  trialStartedAt DateTime?
 
   // ✅ Premium interno do app
-  ownerPaid         Boolean   @default(false)
-  premiumStartedAt  DateTime?
+  ownerPaid        Boolean   @default(false)
+  premiumStartedAt DateTime?
 
   // ✅ Stripe
-  stripeCustomerId       String?  @unique
-  stripeSubscriptionId   String?  @unique
-  stripePriceId          String?
-  stripeStatus           String?
-  currentPeriodEnd       DateTime?
-  cancelAtPeriodEnd      Boolean  @default(false)
-
-  // ✅ dados extras
-  birthDate    DateTime?
-  cpf          String?   @unique
+  stripeCustomerId     String?  @unique
+  stripeSubscriptionId String?  @unique
+  stripePriceId        String?
+  stripeStatus         String?
+  currentPeriodEnd     DateTime?
+  cancelAtPeriodEnd    Boolean  @default(false)
 
   // ✅ TENANT troca senha no primeiro login
   mustChangePassword Boolean @default(false)
@@ -53,41 +54,48 @@ model User {
   resetPasswordToken   String?
   resetPasswordExpires DateTime?
 
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // ✅ Se esse usuário for TENANT, terá um perfil
   tenantProfile TenantProfile? @relation("TenantUser")
 
   // ✅ Se esse usuário for OWNER, poderá ter vários tenants vinculados
-  ownedTenants  TenantProfile[] @relation("OwnerTenants")
+  ownedTenants TenantProfile[] @relation("OwnerTenants")
+
+  // ✅ Contratos que esse OWNER criou/assinou
+  ownerContracts RentalContract[] @relation("OwnerContracts")
 }
 
 model TenantProfile {
-  id        String   @id @default(cuid())
+  id String @id @default(cuid())
 
   // 🔗 vínculo com TENANT (User)
-  userId    String   @unique
-  user      User     @relation("TenantUser", fields: [userId], references: [id], onDelete: Cascade)
+  userId String @unique
+  user   User   @relation("TenantUser", fields: [userId], references: [id], onDelete: Cascade)
 
   // 🔗 vínculo com OWNER (User) que criou o TENANT
-  ownerId   String
-  owner     User     @relation("OwnerTenants", fields: [ownerId], references: [id], onDelete: Cascade)
+  ownerId String
+  owner   User @relation("OwnerTenants", fields: [ownerId], references: [id], onDelete: Cascade)
 
   // 🧾 dados do inquilino
   fullName  String
   cpf       String   @unique
   rg        String
-  address   String
-  cep       String
-  city      String
+  email     String
   phone     String
+
+  address String
+  cep     String
+  city    String
+
+  birthDate DateTime
 
   // 💰 aluguel
   rentValueCents Int
 
-  // 📄 contrato
-  contracts RentalContract[]
+  // ✅ contrato gerado para esse inquilino
+  contract RentalContract?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -98,32 +106,35 @@ model TenantProfile {
 model RentalContract {
   id String @id @default(cuid())
 
-  tenantProfileId String
+  tenantProfileId String @unique
   tenantProfile   TenantProfile @relation(fields: [tenantProfileId], references: [id], onDelete: Cascade)
 
+  // ✅ OWNER que gerou o contrato
   ownerId String
-  owner   User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  owner   User @relation("OwnerContracts", fields: [ownerId], references: [id], onDelete: Cascade)
 
   status ContractStatus @default(DRAFT)
 
-  // 📌 dados do contrato
+  // ✅ Texto do contrato final já preenchido
   contractText String
+
+  // ✅ cidade sempre a mesma do cadastro e data do dia
   signedCity   String
   signedAtDate DateTime
 
-  // 💰 valor
+  // ✅ valor do aluguel no contrato
   rentValueCents Int
 
-  // ✍️ assinaturas (base64 PNG)
-  ownerSignatureDataUrl  String?
-  ownerSignedAt          DateTime?
+  // ✍️ assinatura do LOCADOR (OWNER)
+  ownerSignatureDataUrl String?
+  ownerSignedAt         DateTime?
 
+  // ✍️ assinatura do LOCATÁRIO (TENANT)
   tenantSignatureDataUrl String?
   tenantSignedAt         DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([tenantProfileId])
   @@index([ownerId])
 }
