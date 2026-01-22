@@ -12,6 +12,12 @@ enum Role {
   OWNER
 }
 
+enum ContractStatus {
+  DRAFT
+  OWNER_SIGNED
+  TENANT_SIGNED
+}
+
 model User {
   id           String   @id @default(cuid())
   email        String   @unique
@@ -36,9 +42,9 @@ model User {
   currentPeriodEnd       DateTime?
   cancelAtPeriodEnd      Boolean  @default(false)
 
-  // ✅ Segurança extra
+  // ✅ dados extras
   birthDate    DateTime?
-  cpf          String?  @unique
+  cpf          String?   @unique
 
   // ✅ TENANT troca senha no primeiro login
   mustChangePassword Boolean @default(false)
@@ -74,12 +80,50 @@ model TenantProfile {
   rg        String
   address   String
   cep       String
+  city      String
+  phone     String
 
-  // ✅ telefone (AGORA OPCIONAL para não quebrar banco antigo)
-  phone     String?
+  // 💰 aluguel
+  rentValueCents Int
+
+  // 📄 contrato
+  contracts RentalContract[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([ownerId])
+}
+
+model RentalContract {
+  id String @id @default(cuid())
+
+  tenantProfileId String
+  tenantProfile   TenantProfile @relation(fields: [tenantProfileId], references: [id], onDelete: Cascade)
+
+  ownerId String
+  owner   User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  status ContractStatus @default(DRAFT)
+
+  // 📌 dados do contrato
+  contractText String
+  signedCity   String
+  signedAtDate DateTime
+
+  // 💰 valor
+  rentValueCents Int
+
+  // ✍️ assinaturas (base64 PNG)
+  ownerSignatureDataUrl  String?
+  ownerSignedAt          DateTime?
+
+  tenantSignatureDataUrl String?
+  tenantSignedAt         DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantProfileId])
   @@index([ownerId])
 }

@@ -7,6 +7,10 @@ import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 
+function onlyDigits(v: string) {
+  return (v || "").replace(/\D/g, "");
+}
+
 export async function POST(req: Request) {
   try {
     const session = await getServerSession(authOptions);
@@ -19,92 +23,129 @@ export async function POST(req: Request) {
       where: { email: session.user.email },
     });
 
-    if (!owner) {
-      return NextResponse.json({ error: "Owner não encontrado" }, { status: 404 });
-    }
-
-    if (owner.role !== "OWNER") {
-      return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
-    }
-
-    const now = new Date();
-    const hasPremium =
-      owner.ownerPaid ||
-      (owner.trialEndsAt && owner.trialEndsAt > now) ||
-      owner.stripeStatus === "active" ||
-      owner.stripeStatus === "trialing";
-
-    if (!hasPremium) {
-      return NextResponse.json(
-        { error: "❌ Sem acesso. Ative Trial ou vire Premium." },
-        { status: 403 }
-      );
+    if (!owner || owner.role !== "OWNER") {
+      return NextResponse.json({ error: "Apenas OWNER" }, { status: 403 });
     }
 
     const body = await req.json();
 
-    const fullName = String(body.fullName || "").trim();
-    const email = String(body.email || "").trim().toLowerCase();
-    const address = String(body.address || "").trim();
-    const cep = String(body.cep || "").trim();
-    const cpf = String(body.cpf || "").trim();
-    const rg = String(body.rg || "").trim();
-    const phone = String(body.phone || "").trim(); // ✅ NOVO
+    const fullName = (body.fullName || "").trim();
+    const email = (body.email || "").trim().toLowerCase();
+    const address = (body.address || "").trim();
+    const cep = (body.cep || "").trim();
+    const city = (body.city || "").trim();
+    const cpf = onlyDigits(body.cpf || "");
+    const rg = (body.rg || "").trim();
+    const phone = (body.phone || "").trim();
 
-    if (!fullName || !email || !address || !cep || !cpf || !rg || !phone) {
-      return NextResponse.json(
-        { error: "Preencha todos os campos." },
-        { status: 400 }
-      );
+    const rentValue = (body.rentValue || "").toString().trim(); // "29,90" ou "1200"
+
+    if (!fullName || !email || !address || !cep || !city || !cpf || !rg || !phone || !rentValue) {
+      return NextResponse.json({ error: "Preencha todos os campos" }, { status: 400 });
     }
 
-    // ✅ senha padrão do tenant
-    const defaultPassword = "123456";
-    const passwordHash = await bcrypt.hash(defaultPassword, 10);
+    // converte aluguel para centavos (aceita 1200, 1200.00, 1.200,00 etc)
+    const normalized = rentValue
+      .replace(/\./g, "")
+      .replace(",", ".")
+      .replace(/[^\d.]/g, "");
 
-    // ✅ cria o usuário TENANT + perfil do tenant
-    const created = await prisma.user.create({
-      data: {
-        email,
-        name: fullName,
-        passwordHash,
-        role: "TENANT",
-        mustChangePassword: true,
+    const rentValueFloat = Number(normalized);
+    if (!rentValueFloat || rentValueFloat <= 0) {
+      return NextResponse.json({ error: "Valor do aluguel inválido" }, { status: 400 });
+    }
 
-        tenantProfile: {
-          create: {
-            ownerId: owner.id,
-            fullName,
-            cpf,
-            rg,
-            phone, // ✅ NOVO
-            address,
-            cep,
-          },
+    const rentValueCents = Math.round(rentValueFloat * 100);
+
+    const existsEmail = await prisma.user.findUnique({ where: { email } });
+    if (existsEmail) {
+      return NextResponse.json({ error: "Já existe usuário com esse e-mail" }, { status: 400 });
+    }
+
+    const existsCpf = await prisma.tenantProfile.findUnique({
+      where: { cpf },
+    });
+
+    if (existsCpf) {
+      return NextResponse.json({ error: "CPF já cadastrado" }, { status: 400 });
+    }
+
+    // senha automática 123456 + mustChangePassword
+    const passwordHash = await bcrypt.hash("123456", 10);
+
+    // ✅ cria tenant (User) + profile + contrato tudo junto
+    const created = await prisma.$transaction(async (tx) => {
+      const tenantUser = await tx.user.create({
+        data: {
+          email,
+          name: fullName,
+          passwordHash,
+          role: "TENANT",
+          mustChangePassword: true,
         },
-      },
-      include: {
-        tenantProfile: true,
-      },
+      });
+
+      const tenantProfile = await tx.tenantProfile.create({
+        data: {
+          userId: tenantUser.id,
+          ownerId: owner.id,
+
+          fullName,
+          cpf,
+          rg,
+          address,
+          cep,
+          city,
+          phone,
+
+          rentValueCents,
+        },
+      });
+
+      // ✅ contrato preenchido automaticamente (cidade + data do dia)
+      const today = new Date();
+
+      const contractText = `
+CONTRATO DE LOCAÇÃO
+
+Assinado em ${city}, na data ${today.toLocaleDateString("pt-BR")}.
+
+LOCADOR: ${owner.name ?? "Proprietário"}
+INQUILINO: ${fullName}
+CPF: ${cpf}
+RG: ${rg}
+ENDEREÇO: ${address}
+CEP: ${cep}
+TELEFONE: ${phone}
+
+VALOR DO ALUGUEL: R$ ${(rentValueCents / 100).toFixed(2).replace(".", ",")}
+
+(Conteúdo do contrato completo será exibido na tela e validado por assinatura digital)
+      `.trim();
+
+      const contract = await tx.rentalContract.create({
+        data: {
+          tenantProfileId: tenantProfile.id,
+          ownerId: owner.id,
+          status: "DRAFT",
+          contractText,
+          signedCity: city,
+          signedAtDate: today,
+          rentValueCents,
+        },
+      });
+
+      return { tenantUser, tenantProfile, contract };
     });
 
     return NextResponse.json({
-      message: "✅ Inquilino criado com sucesso!",
-      tenant: {
-        id: created.id,
-        email: created.email,
-        name: created.name,
-        mustChangePassword: created.mustChangePassword,
-        tenantProfile: created.tenantProfile,
-      },
-      defaultPassword: "123456",
+      message: "Inquilino cadastrado com sucesso ✅",
+      tenantEmail: created.tenantUser.email,
+      tenantPassword: "123456",
+      contractId: created.contract.id,
     });
   } catch (err: any) {
     console.error("❌ Erro ao criar tenant:", err?.message || err);
-
-    return NextResponse.json(
-      { error: "Erro interno ao criar inquilino" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Erro interno" }, { status: 500 });
   }
 }
