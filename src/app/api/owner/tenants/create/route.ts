@@ -1,30 +1,11 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import bcrypt from "bcryptjs";
-import { z } from "zod";
 
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
-
-const schema = z.object({
-  fullName: z.string().min(3, "Nome obrigatório"),
-  email: z.string().email("Email inválido"),
-  address: z.string().min(3, "Endereço obrigatório"),
-  cep: z.string().min(8, "CEP inválido"),
-  cpf: z.string().min(11, "CPF inválido"),
-  rg: z.string().min(3, "RG inválido"),
-  birthDate: z.string().min(8, "Data de nascimento obrigatória"),
-});
-
-function normalize(str: string) {
-  return str.trim();
-}
-
-function normalizeOnlyNumbers(str: string) {
-  return str.replace(/\D/g, "");
-}
 
 export async function POST(req: Request) {
   try {
@@ -34,7 +15,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     }
 
-    // ✅ pega o OWNER logado
     const owner = await prisma.user.findUnique({
       where: { email: session.user.email },
     });
@@ -44,88 +24,62 @@ export async function POST(req: Request) {
     }
 
     if (owner.role !== "OWNER") {
+      return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
+    }
+
+    const now = new Date();
+    const hasPremium =
+      owner.ownerPaid ||
+      (owner.trialEndsAt && owner.trialEndsAt > now) ||
+      owner.stripeStatus === "active" ||
+      owner.stripeStatus === "trialing";
+
+    if (!hasPremium) {
       return NextResponse.json(
-        { error: "Apenas OWNER pode cadastrar inquilinos" },
+        { error: "❌ Sem acesso. Ative Trial ou vire Premium." },
         { status: 403 }
       );
     }
 
     const body = await req.json();
 
-    const parsed = schema.safeParse(body);
-    if (!parsed.success) {
+    const fullName = String(body.fullName || "").trim();
+    const email = String(body.email || "").trim().toLowerCase();
+    const address = String(body.address || "").trim();
+    const cep = String(body.cep || "").trim();
+    const cpf = String(body.cpf || "").trim();
+    const rg = String(body.rg || "").trim();
+    const phone = String(body.phone || "").trim(); // ✅ NOVO
+
+    if (!fullName || !email || !address || !cep || !cpf || !rg || !phone) {
       return NextResponse.json(
-        {
-          error: "Dados inválidos",
-          details: parsed.error.flatten().fieldErrors,
-        },
+        { error: "Preencha todos os campos." },
         { status: 400 }
       );
     }
 
-    const fullName = normalize(parsed.data.fullName);
-    const email = normalize(parsed.data.email).toLowerCase();
-    const address = normalize(parsed.data.address);
-    const cep = normalizeOnlyNumbers(parsed.data.cep);
-    const cpf = normalizeOnlyNumbers(parsed.data.cpf);
-    const rg = normalize(parsed.data.rg);
-
-    // birthDate vem como string -> converte em Date
-    // Aceita "YYYY-MM-DD" (recomendado no input type="date")
-    const birthDate = new Date(parsed.data.birthDate);
-
-    if (Number.isNaN(birthDate.getTime())) {
-      return NextResponse.json(
-        { error: "Data de nascimento inválida" },
-        { status: 400 }
-      );
-    }
-
-    // ✅ senha padrão
+    // ✅ senha padrão do tenant
     const defaultPassword = "123456";
     const passwordHash = await bcrypt.hash(defaultPassword, 10);
 
-    // ✅ valida duplicados
-    const existingUser = await prisma.user.findUnique({
-      where: { email },
-    });
-
-    if (existingUser) {
-      return NextResponse.json(
-        { error: "Já existe um usuário com esse email" },
-        { status: 409 }
-      );
-    }
-
-    const existingCpf = await prisma.tenantProfile.findUnique({
-      where: { cpf },
-    });
-
-    if (existingCpf) {
-      return NextResponse.json(
-        { error: "Já existe um inquilino cadastrado com esse CPF" },
-        { status: 409 }
-      );
-    }
-
-    // ✅ cria tenant (User) + profile (TenantProfile) juntos
-    const createdTenant = await prisma.user.create({
+    // ✅ cria o usuário TENANT + perfil do tenant
+    const created = await prisma.user.create({
       data: {
         email,
         name: fullName,
         passwordHash,
         role: "TENANT",
         mustChangePassword: true,
-        birthDate,
 
         tenantProfile: {
           create: {
+            ownerId: owner.id,
             fullName,
             cpf,
             rg,
+            phone, // ✅ NOVO
             address,
             cep,
-            ownerId: owner.id,
           },
         },
       },
@@ -134,28 +88,22 @@ export async function POST(req: Request) {
       },
     });
 
-    return NextResponse.json(
-      {
-        message: "✅ Inquilino cadastrado com sucesso!",
-        tenant: {
-          id: createdTenant.id,
-          email: createdTenant.email,
-          name: createdTenant.name,
-          mustChangePassword: createdTenant.mustChangePassword,
-          profile: createdTenant.tenantProfile,
-        },
-        login: {
-          email,
-          password: defaultPassword,
-        },
+    return NextResponse.json({
+      message: "✅ Inquilino criado com sucesso!",
+      tenant: {
+        id: created.id,
+        email: created.email,
+        name: created.name,
+        mustChangePassword: created.mustChangePassword,
+        tenantProfile: created.tenantProfile,
       },
-      { status: 201 }
-    );
+      defaultPassword: "123456",
+    });
   } catch (err: any) {
     console.error("❌ Erro ao criar tenant:", err?.message || err);
 
     return NextResponse.json(
-      { error: "Erro interno ao cadastrar inquilino" },
+      { error: "Erro interno ao criar inquilino" },
       { status: 500 }
     );
   }

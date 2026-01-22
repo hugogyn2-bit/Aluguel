@@ -1,16 +1,47 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 
-type ApiError = {
-  error?: string;
-  details?: Record<string, string[]>;
-};
+function maskCPF(v: string) {
+  return v
+    .replace(/\D/g, "")
+    .slice(0, 11)
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d{1,2})$/, "$1-$2");
+}
+
+function maskCEP(v: string) {
+  return v
+    .replace(/\D/g, "")
+    .slice(0, 8)
+    .replace(/(\d{5})(\d)/, "$1-$2");
+}
+
+function maskBirth(v: string) {
+  return v
+    .replace(/\D/g, "")
+    .slice(0, 8)
+    .replace(/(\d{2})(\d)/, "$1/$2")
+    .replace(/(\d{2})(\d)/, "$1/$2");
+}
+
+function maskPhone(v: string) {
+  // (99) 99999-9999 ou (99) 9999-9999
+  const digits = v.replace(/\D/g, "").slice(0, 11);
+
+  if (digits.length <= 10) {
+    return digits
+      .replace(/^(\d{2})(\d)/, "($1) $2")
+      .replace(/(\d{4})(\d)/, "$1-$2");
+  }
+
+  return digits
+    .replace(/^(\d{2})(\d)/, "($1) $2")
+    .replace(/(\d{5})(\d)/, "$1-$2");
+}
 
 export default function CreateTenantPage() {
-  const [loading, setLoading] = useState(false);
-
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [address, setAddress] = useState("");
@@ -18,22 +49,14 @@ export default function CreateTenantPage() {
   const [cpf, setCpf] = useState("");
   const [rg, setRg] = useState("");
   const [birthDate, setBirthDate] = useState("");
+  const [phone, setPhone] = useState(""); // ✅ NOVO
 
   const [msg, setMsg] = useState<string | null>(null);
-  const [createdLogin, setCreatedLogin] = useState<{ email: string; password: string } | null>(
-    null
-  );
+  const [loading, setLoading] = useState(false);
 
-  function formatOnlyNumbers(v: string) {
-    return v.replace(/\D/g, "");
-  }
-
-  async function handleCreateTenant(e: React.FormEvent) {
-    e.preventDefault();
-
+  async function handleCreateTenant() {
     setLoading(true);
     setMsg(null);
-    setCreatedLogin(null);
 
     try {
       const res = await fetch("/api/owner/tenants/create", {
@@ -46,32 +69,19 @@ export default function CreateTenantPage() {
           cep,
           cpf,
           rg,
-          birthDate,
+          phone, // ✅ NOVO
+          birthDate, // (se quiser salvar depois no prisma, dá pra usar)
         }),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
-        const err = data as ApiError;
-
-        if (err?.details) {
-          const readable = Object.entries(err.details)
-            .map(([field, errors]) => `• ${field}: ${errors.join(", ")}`)
-            .join("\n");
-
-          setMsg(err.error ? `${err.error}\n${readable}` : readable);
-        } else {
-          setMsg(err?.error || "Erro ao cadastrar inquilino");
-        }
-
+        setMsg(data?.error || "Erro ao cadastrar inquilino.");
         return;
       }
 
-      setMsg(data?.message || "✅ Inquilino cadastrado com sucesso!");
-      setCreatedLogin(data?.login || null);
-
-      // limpa
+      setMsg(`✅ Criado! Senha padrão: ${data?.defaultPassword || "123456"}`);
       setFullName("");
       setEmail("");
       setAddress("");
@@ -79,8 +89,9 @@ export default function CreateTenantPage() {
       setCpf("");
       setRg("");
       setBirthDate("");
-    } catch (err) {
-      setMsg("❌ Erro interno ao cadastrar inquilino");
+      setPhone("");
+    } catch {
+      setMsg("Erro interno ao cadastrar.");
     } finally {
       setLoading(false);
     }
@@ -88,143 +99,84 @@ export default function CreateTenantPage() {
 
   return (
     <div className="min-h-screen bg-black text-white px-4 py-10">
-      <div className="mx-auto w-full max-w-2xl">
-        <div className="mb-6 flex items-center justify-between">
-          <h1 className="text-2xl font-extrabold">Cadastrar novo inquilino</h1>
+      <div className="mx-auto w-full max-w-2xl rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur-xl">
+        <h1 className="text-2xl font-extrabold">Cadastrar Inquilino</h1>
+        <p className="mt-2 text-white/70 text-sm">
+          O inquilino será criado com senha padrão <b>123456</b> e será obrigado a trocar no primeiro login.
+        </p>
 
-          <Link
-            href="/owner"
-            className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm hover:bg-white/10"
+        <div className="mt-6 grid gap-3">
+          <input
+            className="w-full rounded-xl bg-white/10 border border-white/10 px-4 py-3 outline-none"
+            placeholder="Nome completo"
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+          />
+
+          <input
+            className="w-full rounded-xl bg-white/10 border border-white/10 px-4 py-3 outline-none"
+            placeholder="E-mail"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+
+          <input
+            className="w-full rounded-xl bg-white/10 border border-white/10 px-4 py-3 outline-none"
+            placeholder="Telefone (Ex.: (11) 99999-9999)"
+            value={phone}
+            onChange={(e) => setPhone(maskPhone(e.target.value))}
+          />
+
+          <input
+            className="w-full rounded-xl bg-white/10 border border-white/10 px-4 py-3 outline-none"
+            placeholder="Endereço completo"
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+          />
+
+          <input
+            className="w-full rounded-xl bg-white/10 border border-white/10 px-4 py-3 outline-none"
+            placeholder="CEP (Ex.: 00000-000)"
+            value={cep}
+            onChange={(e) => setCep(maskCEP(e.target.value))}
+          />
+
+          <div className="grid gap-3 md:grid-cols-2">
+            <input
+              className="w-full rounded-xl bg-white/10 border border-white/10 px-4 py-3 outline-none"
+              placeholder="CPF (Ex.: 000.000.000-00)"
+              value={cpf}
+              onChange={(e) => setCpf(maskCPF(e.target.value))}
+            />
+
+            <input
+              className="w-full rounded-xl bg-white/10 border border-white/10 px-4 py-3 outline-none"
+              placeholder="RG"
+              value={rg}
+              onChange={(e) => setRg(e.target.value)}
+            />
+          </div>
+
+          <input
+            className="w-full rounded-xl bg-white/10 border border-white/10 px-4 py-3 outline-none"
+            placeholder="Data de nascimento (Ex.: dd/mm/aaaa)"
+            value={birthDate}
+            onChange={(e) => setBirthDate(maskBirth(e.target.value))}
+          />
+
+          <button
+            onClick={handleCreateTenant}
+            disabled={loading}
+            className="mt-2 w-full rounded-xl bg-gradient-to-r from-cyan-500 via-fuchsia-500 to-purple-600 px-4 py-3 font-semibold hover:opacity-95 disabled:opacity-60"
           >
-            ⬅ Voltar
-          </Link>
-        </div>
+            {loading ? "Cadastrando..." : "✅ Criar Inquilino"}
+          </button>
 
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur-xl">
-          <form onSubmit={handleCreateTenant} className="space-y-4">
-            {/* Nome */}
-            <div>
-              <label className="text-sm text-white/70">Nome completo</label>
-              <input
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                placeholder="Ex: João da Silva"
-                className="mt-1 w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 outline-none focus:border-white/30"
-                required
-              />
-            </div>
-
-            {/* Email */}
-            <div>
-              <label className="text-sm text-white/70">Email</label>
-              <input
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Ex: joao@email.com"
-                type="email"
-                className="mt-1 w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 outline-none focus:border-white/30"
-                required
-              />
-            </div>
-
-            {/* Endereço */}
-            <div>
-              <label className="text-sm text-white/70">Endereço</label>
-              <input
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                placeholder="Rua, número, bairro, cidade"
-                className="mt-1 w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 outline-none focus:border-white/30"
-                required
-              />
-            </div>
-
-            {/* CEP */}
-            <div>
-              <label className="text-sm text-white/70">CEP</label>
-              <input
-                value={cep}
-                onChange={(e) => setCep(formatOnlyNumbers(e.target.value))}
-                placeholder="Somente números"
-                className="mt-1 w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 outline-none focus:border-white/30"
-                required
-              />
-            </div>
-
-            {/* CPF */}
-            <div>
-              <label className="text-sm text-white/70">CPF</label>
-              <input
-                value={cpf}
-                onChange={(e) => setCpf(formatOnlyNumbers(e.target.value))}
-                placeholder="Somente números"
-                className="mt-1 w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 outline-none focus:border-white/30"
-                required
-              />
-            </div>
-
-            {/* RG */}
-            <div>
-              <label className="text-sm text-white/70">RG</label>
-              <input
-                value={rg}
-                onChange={(e) => setRg(e.target.value)}
-                placeholder="Ex: 1234567"
-                className="mt-1 w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 outline-none focus:border-white/30"
-                required
-              />
-            </div>
-
-            {/* Data de nascimento */}
-            <div>
-              <label className="text-sm text-white/70">Data de nascimento</label>
-              <input
-                value={birthDate}
-                onChange={(e) => setBirthDate(e.target.value)}
-                type="date"
-                className="mt-1 w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 outline-none focus:border-white/30"
-                required
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full rounded-xl bg-gradient-to-r from-cyan-500 via-fuchsia-500 to-purple-600 px-4 py-3 font-semibold hover:opacity-95 disabled:opacity-60"
-            >
-              {loading ? "Cadastrando..." : "✅ Cadastrar inquilino"}
-            </button>
-          </form>
-
-          {/* Mensagens */}
           {msg ? (
-            <div className="mt-5 whitespace-pre-line rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/80">
+            <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/80">
               {msg}
             </div>
           ) : null}
-
-          {/* Login criado */}
-          {createdLogin ? (
-            <div className="mt-5 rounded-xl border border-green-500/20 bg-green-500/10 px-4 py-3 text-sm">
-              <div className="font-semibold text-green-200">
-                ✅ Login do inquilino criado automaticamente:
-              </div>
-
-              <div className="mt-2 text-white/90">
-                <b>Email:</b> {createdLogin.email}
-                <br />
-                <b>Senha padrão:</b> {createdLogin.password}
-              </div>
-
-              <div className="mt-2 text-xs text-white/60">
-                * O inquilino será obrigado a trocar a senha no primeiro login.
-              </div>
-            </div>
-          ) : null}
-
-          <div className="mt-6 text-xs text-white/40">
-            Dica: você pode criar o tenant com senha padrão <b>123456</b> e ele troca no primeiro login.
-          </div>
         </div>
       </div>
     </div>
