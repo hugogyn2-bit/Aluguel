@@ -4,7 +4,7 @@ import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 
-export function SignInForm() {
+export default function SignInForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -39,17 +39,9 @@ export function SignInForm() {
   }
 
   return (
-    <div style={{ display: "grid", gap: 12, marginTop: 16 }}>
+    <div className="grid gap-3">
       {created && (
-        <div
-          style={{
-            padding: 10,
-            borderRadius: 10,
-            background: "rgba(16, 185, 129, 0.12)",
-            border: "1px solid rgba(16, 185, 129, 0.25)",
-            fontSize: 14,
-          }}
-        >
+        <div className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
           Usuário criado com sucesso. Faça login abaixo.
         </div>
       )}
@@ -59,6 +51,7 @@ export function SignInForm() {
         placeholder="E-mail"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
+        className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white placeholder:text-white/40 outline-none focus:border-white/20"
       />
 
       <input
@@ -66,17 +59,30 @@ export function SignInForm() {
         placeholder="Senha"
         value={password}
         onChange={(e) => setPassword(e.target.value)}
+        className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white placeholder:text-white/40 outline-none focus:border-white/20"
       />
 
-      <button onClick={handleLogin} disabled={loading}>
+      <button
+        onClick={handleLogin}
+        disabled={loading}
+        className="w-full rounded-xl bg-gradient-to-r from-cyan-500 via-fuchsia-500 to-purple-600 px-4 py-3 font-semibold text-white hover:opacity-95 disabled:opacity-60"
+      >
         {loading ? "Entrando..." : "Entrar"}
       </button>
 
-      {error && <p style={{ color: "crimson" }}>{error}</p>}
+      {error && (
+        <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+          {error}
+        </div>
+      )}
 
-      <div style={{ fontSize: 14 }}>
-        <a href="/auth/sign-up">Criar conta</a> •{" "}
-        <a href="/auth/forgot-password">Esqueci minha senha</a>
+      <div className="mt-2 flex items-center justify-between text-sm text-white/60">
+        <a href="/auth/sign-up" className="hover:text-white">
+          Criar conta
+        </a>
+        <a href="/auth/forgot-password" className="hover:text-white">
+          Esqueci minha senha
+        </a>
       </div>
     </div>
   );

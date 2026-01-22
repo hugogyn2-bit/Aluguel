@@ -1,58 +1,72 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 
-export function ForgotPasswordForm() {
-  const router = useRouter();
+export default function ForgotPasswordForm() {
+  const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  const [ok, setOk] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
+  async function handleForgotPassword() {
     setLoading(true);
-    setErr(null);
-    setOk(null);
+    setMsg(null);
+    setError(null);
 
     try {
-      const fd = new FormData(e.currentTarget);
-      const res = await fetch("/auth/forgot-password/submit", {
+      const res = await fetch("/api/auth/forgot-password/request", {
         method: "POST",
-        body: fd,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
       });
-      const data = await res.json().catch(() => ({}));
+
+      const data = await res.json();
 
       if (!res.ok) {
-        setErr(data?.error || "Não foi possível redefinir a senha.");
+        setError(data?.error || "Erro ao solicitar redefinição.");
         return;
       }
 
-      setOk("Senha alterada! Faça login novamente.");
-      setTimeout(() => router.push("/auth/sign-in?role=OWNER"), 800);
-    } catch (e: any) {
-      setErr(e?.message || "Erro inesperado.");
+      setMsg(
+        data?.message ||
+          "Se esse e-mail existir, enviamos as instruções ✅"
+      );
+    } catch {
+      setError("Erro interno. Tente novamente.");
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <form onSubmit={onSubmit} style={{ display: "grid", gap: 12, marginTop: 16 }}>
-      <input name="email" type="email" placeholder="Seu email de OWNER" required />
+    <div className="grid gap-3">
       <input
-        name="birthDate"
-        placeholder="Data de nascimento (dd/mm/aaaa)"
-        inputMode="numeric"
-        required
+        type="email"
+        placeholder="E-mail"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white placeholder:text-white/40 outline-none focus:border-white/20"
       />
-      <input name="newPassword" type="password" placeholder="Nova senha" minLength={6} required />
-      <button type="submit" disabled={loading}>
-        {loading ? "Salvando..." : "Redefinir senha"}
+
+      <button
+        onClick={handleForgotPassword}
+        disabled={loading}
+        className="w-full rounded-xl bg-gradient-to-r from-cyan-500 via-fuchsia-500 to-purple-600 px-4 py-3 font-semibold text-white hover:opacity-95 disabled:opacity-60"
+      >
+        {loading ? "Enviando..." : "Enviar link de recuperação"}
       </button>
 
-      {err ? <p style={{ color: "crimson" }}>{err}</p> : null}
-      {ok ? <p style={{ color: "green" }}>{ok}</p> : null}
-    </form>
+      {msg && (
+        <div className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
+          {msg}
+        </div>
+      )}
+
+      {error && (
+        <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+          {error}
+        </div>
+      )}
+    </div>
   );
 }
