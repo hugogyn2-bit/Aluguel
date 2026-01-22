@@ -1,11 +1,30 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import bcrypt from "bcryptjs";
+import { z } from "zod";
 
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
+
+const schema = z.object({
+  fullName: z.string().min(3, "Nome obrigatório"),
+  email: z.string().email("Email inválido"),
+  address: z.string().min(3, "Endereço obrigatório"),
+  cep: z.string().min(8, "CEP inválido"),
+  cpf: z.string().min(11, "CPF inválido"),
+  rg: z.string().min(3, "RG inválido"),
+  birthDate: z.string().min(8, "Data de nascimento obrigatória"),
+});
+
+function normalize(str: string) {
+  return str.trim();
+}
+
+function normalizeOnlyNumbers(str: string) {
+  return str.replace(/\D/g, "");
+}
 
 export async function POST(req: Request) {
   try {
@@ -15,77 +34,98 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     }
 
+    // ✅ pega o OWNER logado
     const owner = await prisma.user.findUnique({
       where: { email: session.user.email },
     });
 
     if (!owner) {
-      return NextResponse.json({ error: "OWNER não encontrado" }, { status: 404 });
+      return NextResponse.json({ error: "Owner não encontrado" }, { status: 404 });
     }
 
     if (owner.role !== "OWNER") {
       return NextResponse.json(
-        { error: "Sem permissão (apenas OWNER)" },
-        { status: 403 }
-      );
-    }
-
-    // ✅ Paywall (trial/premium)
-    const now = new Date();
-    const hasTrial = owner.trialEndsAt && owner.trialEndsAt > now;
-
-    const hasPremiumStripe =
-      owner.stripeStatus === "active" ||
-      owner.stripeStatus === "trialing" ||
-      owner.ownerPaid === true;
-
-    const allowed = Boolean(hasTrial || hasPremiumStripe);
-
-    if (!allowed) {
-      return NextResponse.json(
-        { error: "❌ Sem acesso (paywall). Ative o Trial ou vire Premium." },
+        { error: "Apenas OWNER pode cadastrar inquilinos" },
         { status: 403 }
       );
     }
 
     const body = await req.json();
 
-    const fullName = String(body?.fullName || "").trim();
-    const email = String(body?.email || "").trim().toLowerCase();
-    const address = String(body?.address || "").trim();
-    const cep = String(body?.cep || "").trim();
-    const cpf = String(body?.cpf || "").trim();
-    const rg = String(body?.rg || "").trim();
-    const birthDate = String(body?.birthDate || "").trim();
-
-    if (!fullName || !email || !address || !cep || !cpf || !rg || !birthDate) {
+    const parsed = schema.safeParse(body);
+    if (!parsed.success) {
       return NextResponse.json(
-        { error: "Preencha todos os campos." },
+        {
+          error: "Dados inválidos",
+          details: parsed.error.flatten().fieldErrors,
+        },
+        { status: 400 }
+      );
+    }
+
+    const fullName = normalize(parsed.data.fullName);
+    const email = normalize(parsed.data.email).toLowerCase();
+    const address = normalize(parsed.data.address);
+    const cep = normalizeOnlyNumbers(parsed.data.cep);
+    const cpf = normalizeOnlyNumbers(parsed.data.cpf);
+    const rg = normalize(parsed.data.rg);
+
+    // birthDate vem como string -> converte em Date
+    // Aceita "YYYY-MM-DD" (recomendado no input type="date")
+    const birthDate = new Date(parsed.data.birthDate);
+
+    if (Number.isNaN(birthDate.getTime())) {
+      return NextResponse.json(
+        { error: "Data de nascimento inválida" },
         { status: 400 }
       );
     }
 
     // ✅ senha padrão
-    const passwordHash = await bcrypt.hash("123456", 10);
+    const defaultPassword = "123456";
+    const passwordHash = await bcrypt.hash(defaultPassword, 10);
 
-    // ✅ cria tudo junto (User TENANT + TenantProfile)
-    const tenantUser = await prisma.user.create({
+    // ✅ valida duplicados
+    const existingUser = await prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (existingUser) {
+      return NextResponse.json(
+        { error: "Já existe um usuário com esse email" },
+        { status: 409 }
+      );
+    }
+
+    const existingCpf = await prisma.tenantProfile.findUnique({
+      where: { cpf },
+    });
+
+    if (existingCpf) {
+      return NextResponse.json(
+        { error: "Já existe um inquilino cadastrado com esse CPF" },
+        { status: 409 }
+      );
+    }
+
+    // ✅ cria tenant (User) + profile (TenantProfile) juntos
+    const createdTenant = await prisma.user.create({
       data: {
         email,
         name: fullName,
         passwordHash,
         role: "TENANT",
         mustChangePassword: true,
-        birthDate: new Date(birthDate),
+        birthDate,
 
         tenantProfile: {
           create: {
-            ownerId: owner.id,
             fullName,
             cpf,
             rg,
             address,
             cep,
+            ownerId: owner.id,
           },
         },
       },
@@ -94,26 +134,25 @@ export async function POST(req: Request) {
       },
     });
 
-    return NextResponse.json({
-      message: "✅ Inquilino criado com sucesso",
-      tenant: {
-        id: tenantUser.id,
-        email: tenantUser.email,
-        name: tenantUser.name,
-        mustChangePassword: tenantUser.mustChangePassword,
-        profile: tenantUser.tenantProfile,
+    return NextResponse.json(
+      {
+        message: "✅ Inquilino cadastrado com sucesso!",
+        tenant: {
+          id: createdTenant.id,
+          email: createdTenant.email,
+          name: createdTenant.name,
+          mustChangePassword: createdTenant.mustChangePassword,
+          profile: createdTenant.tenantProfile,
+        },
+        login: {
+          email,
+          password: defaultPassword,
+        },
       },
-    });
+      { status: 201 }
+    );
   } catch (err: any) {
-    console.error("❌ erro criar tenant:", err?.message || err);
-
-    // erros comuns de unique
-    if (err?.code === "P2002") {
-      return NextResponse.json(
-        { error: "Email ou CPF já cadastrado." },
-        { status: 409 }
-      );
-    }
+    console.error("❌ Erro ao criar tenant:", err?.message || err);
 
     return NextResponse.json(
       { error: "Erro interno ao cadastrar inquilino" },
