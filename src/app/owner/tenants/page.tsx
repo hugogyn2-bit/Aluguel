@@ -1,104 +1,161 @@
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import Link from "next/link";
+"use client";
 
-export const runtime = "nodejs";
+import { useEffect, useState } from "react";
 
-export default async function OwnerTenantsPage() {
-  const session = await getServerSession(authOptions);
+type Tenant = {
+  id: string;
+  fullName: string;
+  cpf: string;
+  rg: string;
+  phone: string;
+  address: string;
+  cep: string;
+  createdAt: string;
+  user: {
+    id: string;
+    email: string;
+    mustChangePassword: boolean;
+    createdAt: string;
+  };
+};
 
-  if (!session?.user?.email) {
+export default function OwnerTenantsPage() {
+  const [loading, setLoading] = useState(true);
+  const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  async function loadTenants() {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/owner/tenants/list");
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data?.error || "Erro ao carregar inquilinos");
+        setTenants([]);
+        return;
+      }
+
+      setTenants(data.tenants || []);
+    } catch {
+      setError("Erro interno ao carregar.");
+      setTenants([]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadTenants();
+  }, []);
+
+  if (loading) {
     return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center">
-        <div className="text-white/70">Você precisa estar logado.</div>
+      <div className="min-h-screen flex items-center justify-center bg-black text-white">
+        Carregando inquilinos...
       </div>
     );
   }
-
-  const owner = await prisma.user.findUnique({
-    where: { email: session.user.email },
-  });
-
-  if (!owner || owner.role !== "OWNER") {
-    return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center">
-        <div className="text-white/70">Apenas OWNER pode acessar.</div>
-      </div>
-    );
-  }
-
-  const tenants = await prisma.tenantProfile.findMany({
-    where: { ownerId: owner.id },
-    orderBy: { createdAt: "desc" },
-    include: {
-      user: true,
-    },
-  });
 
   return (
-    <div className="min-h-screen bg-black text-white px-6 py-10">
-      <div className="mx-auto max-w-5xl">
-        <div className="flex items-center justify-between gap-3">
-          <h1 className="text-3xl font-extrabold">👥 Meus Inquilinos</h1>
+    <div className="min-h-screen bg-black text-white px-4 py-10">
+      <div className="mx-auto w-full max-w-5xl">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-extrabold">Meus Inquilinos</h1>
+            <p className="text-white/60 text-sm mt-1">
+              Aqui você vê todos os inquilinos cadastrados no seu sistema.
+            </p>
+          </div>
 
-          <div className="flex gap-2">
-            <Link
-              href="/owner/dashboard"
-              className="rounded-xl px-4 py-2 bg-white/10 border border-white/10 hover:bg-white/15"
-            >
-              ← Voltar
-            </Link>
-
-            <Link
+          <div className="flex gap-3">
+            <a
               href="/owner/tenants/create"
-              className="rounded-xl px-4 py-2 bg-gradient-to-r from-cyan-500 via-fuchsia-500 to-purple-600 font-semibold hover:opacity-95"
+              className="rounded-xl bg-gradient-to-r from-cyan-500 via-fuchsia-500 to-purple-600 px-4 py-3 font-semibold hover:opacity-95"
             >
-              ➕ Novo
-            </Link>
+              ➕ Novo Inquilino
+            </a>
+
+            <button
+              onClick={loadTenants}
+              className="rounded-xl bg-white/10 border border-white/10 px-4 py-3 font-semibold hover:bg-white/15"
+            >
+              🔄 Atualizar
+            </button>
           </div>
         </div>
 
-        <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur-xl">
+        {error ? (
+          <div className="mt-6 rounded-2xl border border-red-500/30 bg-red-500/10 p-5 text-red-200">
+            {error}
+          </div>
+        ) : null}
+
+        <div className="mt-8 grid gap-4">
           {tenants.length === 0 ? (
-            <div className="text-white/70">
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-white/70">
               Nenhum inquilino cadastrado ainda.
             </div>
           ) : (
-            <div className="space-y-4">
-              {tenants.map((t) => (
-                <div
-                  key={t.id}
-                  className="rounded-2xl border border-white/10 bg-black/40 p-5"
-                >
-                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
-                    <div>
-                      <div className="text-xl font-bold">{t.fullName}</div>
-                      <div className="text-white/60 text-sm">
-                        Email: {t.user.email}
-                      </div>
-                    </div>
+            tenants.map((t) => (
+              <div
+                key={t.id}
+                className="rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur-xl"
+              >
+                <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+                  <div>
+                    <h2 className="text-xl font-bold">{t.fullName}</h2>
+                    <p className="text-white/60 text-sm mt-1">
+                      Email: <span className="text-white">{t.user.email}</span>
+                    </p>
 
-                    <div className="text-sm text-white/60">
-                      Criado em: {new Date(t.createdAt).toLocaleString()}
-                    </div>
+                    <p className="text-white/60 text-sm mt-1">
+                      CPF: <span className="text-white">{t.cpf}</span> • RG:{" "}
+                      <span className="text-white">{t.rg}</span>
+                    </p>
+
+                    <p className="text-white/60 text-sm mt-1">
+                      Telefone: <span className="text-white">{t.phone}</span>
+                    </p>
+
+                    <p className="text-white/60 text-sm mt-1">
+                      Endereço: <span className="text-white">{t.address}</span>
+                    </p>
+
+                    <p className="text-white/60 text-sm mt-1">
+                      CEP: <span className="text-white">{t.cep}</span>
+                    </p>
                   </div>
 
-                  <div className="mt-3 text-sm text-white/70 grid grid-cols-1 md:grid-cols-2 gap-2">
-                    <div>📌 CPF: {t.cpf}</div>
-                    <div>🪪 RG: {t.rg}</div>
-                    <div>🏠 Endereço: {t.address}</div>
-                    <div>📮 CEP: {t.cep}</div>
-                  </div>
+                  <div className="text-sm text-white/60">
+                    <div className="rounded-xl border border-white/10 bg-black/40 px-4 py-3">
+                      <p>
+                        Login criado em:{" "}
+                        <span className="text-white">
+                          {new Date(t.user.createdAt).toLocaleString()}
+                        </span>
+                      </p>
 
-                  <div className="mt-3 text-xs text-white/50">
-                    Must Change Password:{" "}
-                    {t.user.mustChangePassword ? "✅ Sim" : "❌ Não"}
+                      <p className="mt-2">
+                        Trocar senha no login?{" "}
+                        {t.user.mustChangePassword ? (
+                          <span className="text-yellow-300 font-semibold">SIM</span>
+                        ) : (
+                          <span className="text-green-300 font-semibold">NÃO</span>
+                        )}
+                      </p>
+                    </div>
                   </div>
                 </div>
-              ))}
-            </div>
+              </div>
+            ))
           )}
+        </div>
+
+        <div className="mt-10 text-white/40 text-xs">
+          ✅ Dica: o inquilino entra com senha <b>123456</b> e será obrigado a trocar no primeiro login.
         </div>
       </div>
     </div>

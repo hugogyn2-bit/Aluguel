@@ -1,43 +1,52 @@
 import { NextResponse } from "next/server";
-import { getToken } from "next-auth/jwt";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 
-export async function GET(req: Request) {
+export async function GET() {
   try {
-    const token = await getToken({ req: req as any, secret: process.env.NEXTAUTH_SECRET });
+    const session = await getServerSession(authOptions);
 
-    if (!token) return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
-    if (token.role !== "OWNER") return NextResponse.json({ error: "Somente OWNER" }, { status: 403 });
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+    }
 
-    const ownerId = String(token.id);
+    const owner = await prisma.user.findUnique({
+      where: { email: session.user.email },
+    });
 
-    // ✅ Tenants pertencem ao OWNER via TenantProfile.ownerId
+    if (!owner) {
+      return NextResponse.json({ error: "Owner não encontrado" }, { status: 404 });
+    }
+
+    if (owner.role !== "OWNER") {
+      return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
+    }
+
     const tenants = await prisma.tenantProfile.findMany({
-      where: { ownerId },
+      where: { ownerId: owner.id },
       orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        fullName: true,
-        cpf: true,
-        rg: true,
-        address: true,
-        cep: true,
-        createdAt: true,
+      include: {
         user: {
           select: {
             id: true,
             email: true,
-            name: true,
+            mustChangePassword: true,
+            createdAt: true,
           },
         },
       },
     });
 
-    return NextResponse.json({ ok: true, tenants });
-  } catch (e) {
-    console.error(e);
-    return NextResponse.json({ error: "Erro interno" }, { status: 500 });
+    return NextResponse.json({ tenants });
+  } catch (err: any) {
+    console.error("❌ Erro ao listar tenants:", err?.message || err);
+
+    return NextResponse.json(
+      { error: "Erro interno ao listar inquilinos" },
+      { status: 500 }
+    );
   }
 }
