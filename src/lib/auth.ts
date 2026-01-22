@@ -1,81 +1,69 @@
 import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
-import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
-import { z } from "zod";
-
-const credsSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(1), // ⚠️ relaxado só para diagnóstico
-});
+import { prisma } from "@/lib/prisma";
 
 export const authOptions: NextAuthOptions = {
-  debug: true, // 🔥 MUITO IMPORTANTE
-  session: { strategy: "jwt" },
-  pages: { signIn: "/auth/sign-in" },
+  session: {
+    strategy: "jwt",
+  },
   providers: [
     CredentialsProvider({
-      id: "credentials", // ⚠️ força o ID correto
-      name: "Credentials",
+      name: "credentials",
       credentials: {
-        email: { label: "Email", type: "text" },
+        email: { label: "Email", type: "email" },
         password: { label: "Senha", type: "password" },
       },
       async authorize(credentials) {
-        console.log("👉 AUTHORIZE CHAMADO");
-        console.log("CREDENTIALS:", credentials);
+        const email = credentials?.email?.toLowerCase();
+        const password = credentials?.password;
 
-        if (!credentials?.email || !credentials?.password) {
-          console.log("❌ Credenciais vazias");
-          return null;
-        }
+        if (!email || !password) return null;
 
-        const email = credentials.email.toLowerCase().trim();
-        const password = credentials.password;
-
-        console.log("EMAIL NORMALIZADO:", email);
-
-        const user = await prisma.user.findFirst({
-          where: {
-            email: {
-              equals: email,
-              mode: "insensitive",
-            },
-          },
+        const user = await prisma.user.findUnique({
+          where: { email },
         });
-
-        console.log("USUÁRIO ENCONTRADO:", user ? "SIM" : "NÃO");
 
         if (!user) return null;
 
         const ok = await bcrypt.compare(password, user.passwordHash);
-        console.log("SENHA CONFERE:", ok);
-
         if (!ok) return null;
-
-        console.log("✅ LOGIN OK");
 
         return {
           id: user.id,
           email: user.email,
+          name: user.name,
           role: user.role,
-        };
+          ownerPaid: user.ownerPaid,
+          trialEndsAt: user.trialEndsAt,
+        } as any;
       },
     }),
   ],
   callbacks: {
     async jwt({ token, user }) {
+      // quando loga
       if (user) {
         token.id = (user as any).id;
         token.role = (user as any).role;
+        token.ownerPaid = (user as any).ownerPaid;
+        token.trialEndsAt = (user as any).trialEndsAt;
       }
       return token;
     },
     async session({ session, token }) {
-      (session.user as any).id = token.id;
-      (session.user as any).role = token.role;
+      if (session.user) {
+        (session.user as any).id = token.id;
+        (session.user as any).role = token.role;
+        (session.user as any).ownerPaid = token.ownerPaid;
+        (session.user as any).trialEndsAt = token.trialEndsAt;
+      }
       return session;
     },
   },
+  pages: {
+    signIn: "/auth/sign-in",
+  },
   secret: process.env.NEXTAUTH_SECRET,
+  debug: true,
 };

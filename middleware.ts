@@ -6,34 +6,40 @@ export async function middleware(req: NextRequest) {
   const pathname = req.nextUrl.pathname;
 
   // ✅ libera arquivos estáticos e rotas públicas
-  const publicPaths = [
-    "/",
-    "/favicon.ico",
-    "/robots.txt",
-    "/sitemap.xml",
-  ];
-
-  const isPublic =
-    publicPaths.includes(pathname) ||
+  if (
     pathname.startsWith("/_next") ||
+    pathname.startsWith("/favicon.ico") ||
     pathname.startsWith("/api/auth") ||
-    pathname.startsWith("/auth");
-
-  if (isPublic) {
+    pathname.startsWith("/auth") ||
+    pathname === "/"
+  ) {
     return NextResponse.next();
   }
 
-  // ✅ tudo que for /owner precisa estar logado
+  const token = await getToken({
+    req,
+    secret: process.env.NEXTAUTH_SECRET,
+  });
+
+  // ✅ qualquer área protegida precisa de login
+  if (!token) {
+    return NextResponse.redirect(new URL("/auth/sign-in", req.url));
+  }
+
+  // ✅ protege tudo de /owner (somente OWNER)
   if (pathname.startsWith("/owner")) {
-    const token = await getToken({
-      req,
-      secret: process.env.NEXTAUTH_SECRET,
-    });
-
-    if (!token) {
-      return NextResponse.redirect(new URL("/auth/sign-in", req.url));
+    if (token.role !== "OWNER") {
+      // TENANT ou outro -> manda pro painel do tenant
+      return NextResponse.redirect(new URL("/tenant", req.url));
     }
+    return NextResponse.next();
+  }
 
+  // ✅ protege tudo de /tenant (somente TENANT)
+  if (pathname.startsWith("/tenant")) {
+    if (token.role !== "TENANT") {
+      return NextResponse.redirect(new URL("/owner", req.url));
+    }
     return NextResponse.next();
   }
 
@@ -41,5 +47,5 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/owner/:path*"],
+  matcher: ["/owner/:path*", "/tenant/:path*"],
 };
