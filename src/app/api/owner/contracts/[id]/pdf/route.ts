@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -7,34 +8,34 @@ import { PDFDocument, StandardFonts } from "pdf-lib";
 export const runtime = "nodejs";
 
 export async function GET(
-  _req: Request,
-  { params }: { params: { id: string } }
+  _req: NextRequest,
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions);
+    const { id } = await context.params;
 
+    const session = await getServerSession(authOptions);
     if (!session?.user?.email) {
       return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     }
 
-    const owner = await prisma.user.findUnique({
+    const user = await prisma.user.findUnique({
       where: { email: session.user.email },
     });
 
-    if (!owner) {
+    if (!user) {
       return NextResponse.json({ error: "Usuário não encontrado" }, { status: 404 });
     }
 
-    if (owner.role !== "OWNER") {
+    if (user.role !== "OWNER") {
       return NextResponse.json({ error: "Apenas OWNER" }, { status: 403 });
     }
 
-    const contractId = params.id;
-
     const contract = await prisma.rentalContract.findUnique({
-      where: { id: contractId },
+      where: { id },
       include: {
-        tenantProfile: true,
+        tenant: true,
+        owner: true,
       },
     });
 
@@ -42,114 +43,136 @@ export async function GET(
       return NextResponse.json({ error: "Contrato não encontrado" }, { status: 404 });
     }
 
-    // ✅ dono do contrato precisa ser o OWNER logado
-    if (contract.ownerId !== owner.id) {
+    // ✅ segurança: owner só pode acessar contrato dele
+    if (contract.ownerId !== user.id) {
       return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
     }
 
-    // ✅ GERAR PDF
+    // ✅ gerar PDF
     const pdfDoc = await PDFDocument.create();
     const page = pdfDoc.addPage([595.28, 841.89]); // A4
+
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-
-    const text = contract.contractText || "Contrato vazio";
-    const lines = text.split("\n");
-
-    let y = 800;
+    const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
     page.drawText("CONTRATO DE LOCAÇÃO", {
-      x: 50,
-      y,
+      x: 180,
+      y: 800,
       size: 16,
-      font,
+      font: fontBold,
     });
 
-    y -= 30;
-
-    page.drawText(`Cidade: ${contract.signedCity ?? "-"}`, {
+    page.drawText(`Contrato ID: ${contract.id}`, {
       x: 50,
-      y,
+      y: 770,
       size: 10,
       font,
     });
 
-    y -= 15;
-
-    page.drawText(`Data: ${contract.signedAtDate ?? "-"}`, {
+    page.drawText(`Locador: ${contract.owner.name ?? contract.owner.email}`, {
       x: 50,
-      y,
-      size: 10,
+      y: 740,
+      size: 12,
       font,
     });
 
-    y -= 25;
-
-    for (const line of lines) {
-      if (y < 120) break;
-
-      page.drawText(line.slice(0, 120), {
-        x: 50,
-        y,
-        size: 10,
-        font,
-      });
-
-      y -= 14;
-    }
-
-    y -= 10;
-
-    page.drawText("ASSINATURAS:", { x: 50, y, size: 12, font });
-    y -= 20;
-
-    page.drawText(`Locador assinou: ${contract.ownerSignedAt ? "SIM" : "NÃO"}`, {
+    page.drawText(`Inquilino: ${contract.tenant.fullName}`, {
       x: 50,
-      y,
-      size: 10,
+      y: 720,
+      size: 12,
       font,
     });
 
-    y -= 14;
-
-    page.drawText(`Locatário assinou: ${contract.tenantSignedAt ? "SIM" : "NÃO"}`, {
+    page.drawText(`E-mail: ${contract.tenant.email}`, {
       x: 50,
-      y,
-      size: 10,
+      y: 700,
+      size: 12,
       font,
     });
 
-    const rentBR = (contract.rentValueCents / 100).toLocaleString("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-    });
-
-    y -= 20;
-
-    page.drawText(`Valor do aluguel: ${rentBR}`, {
+    page.drawText(`CPF: ${contract.tenant.cpf}`, {
       x: 50,
-      y,
-      size: 10,
+      y: 680,
+      size: 12,
       font,
     });
 
-    y -= 20;
+    page.drawText(`RG: ${contract.tenant.rg}`, {
+      x: 50,
+      y: 660,
+      size: 12,
+      font,
+    });
 
-    // ✅ Info do tenant
+    page.drawText(`Telefone: ${contract.tenant.phone}`, {
+      x: 50,
+      y: 640,
+      size: 12,
+      font,
+    });
+
+    page.drawText(`Endereço: ${contract.tenant.address}`, {
+      x: 50,
+      y: 620,
+      size: 12,
+      font,
+    });
+
+    page.drawText(`CEP: ${contract.tenant.cep}`, {
+      x: 50,
+      y: 600,
+      size: 12,
+      font,
+    });
+
+    page.drawText(`Cidade: ${contract.tenant.city}`, {
+      x: 50,
+      y: 580,
+      size: 12,
+      font,
+    });
+
     page.drawText(
-      `Inquilino: ${contract.tenantProfile?.fullName ?? "-"}`,
-      { x: 50, y, size: 10, font }
+      `Valor do aluguel: R$ ${(contract.rentValueCents / 100).toFixed(2)}`,
+      {
+        x: 50,
+        y: 560,
+        size: 12,
+        font,
+      }
     );
+
+    page.drawText(
+      `Assinado pelo locador: ${contract.ownerSignedAt ? "SIM" : "NÃO"}`,
+      { x: 50, y: 530, size: 12, font }
+    );
+
+    page.drawText(
+      `Assinado pelo inquilino: ${contract.tenantSignedAt ? "SIM" : "NÃO"}`,
+      { x: 50, y: 510, size: 12, font }
+    );
+
+    page.drawText(`Gerado em: ${new Date().toLocaleDateString("pt-BR")}`, {
+      x: 50,
+      y: 480,
+      size: 10,
+      font,
+    });
 
     const pdfBytes = await pdfDoc.save();
 
-    return new NextResponse(Buffer.from(pdfBytes), {
+    return new NextResponse(pdfBytes, {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename="contrato-${contract.id}.pdf"`,
       },
     });
   } catch (err: any) {
-    console.error("❌ Erro ao gerar PDF do contrato:", err?.message || err);
-    return NextResponse.json({ error: "Erro interno ao gerar PDF" }, { status: 500 });
+    console.error("❌ Erro ao gerar PDF (owner):", err?.message || err);
+
+    return NextResponse.json(
+      { error: "Erro interno ao gerar PDF" },
+      { status: 500 }
+    );
   }
 }
