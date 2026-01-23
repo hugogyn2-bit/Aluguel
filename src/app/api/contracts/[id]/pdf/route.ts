@@ -1,22 +1,10 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
-
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { PDFDocument, StandardFonts } from "pdf-lib";
 
 export const runtime = "nodejs";
-
-function moneyBRL(cents: number) {
-  return (cents / 100).toLocaleString("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  });
-}
-
-function dateBR(date: Date) {
-  return date.toLocaleDateString("pt-BR");
-}
 
 export async function GET(
   req: Request,
@@ -26,7 +14,6 @@ export async function GET(
     const { id } = await context.params;
 
     const session = await getServerSession(authOptions);
-
     if (!session?.user?.email) {
       return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     }
@@ -55,117 +42,88 @@ export async function GET(
       return NextResponse.json({ error: "Contrato não encontrado" }, { status: 404 });
     }
 
-    // ✅ Proteção: OWNER só vê contratos dele / TENANT só vê contrato dele
+    // ✅ PERMISSÃO:
     const isOwnerAllowed =
       user.role === "OWNER" && contract.ownerId === user.id;
 
     const isTenantAllowed =
-      user.role === "TENANT" && contract.tenantUserId === user.id;
+      user.role === "TENANT" &&
+      contract.tenantProfile.userId === user.id;
 
     if (!isOwnerAllowed && !isTenantAllowed) {
       return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
     }
 
-    const tenantProfile = contract.tenantProfile;
-    const tenantUser = tenantProfile.user;
-    const ownerUser = tenantProfile.owner;
-
-    // ✅ cria PDF
+    // ✅ monta PDF
     const pdfDoc = await PDFDocument.create();
-    const page = pdfDoc.addPage([595, 842]); // A4
-
+    const page = pdfDoc.addPage([595.28, 841.89]); // A4
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-    const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-    let y = 800;
+    const fontSize = 11;
+    const margin = 50;
+    const maxWidth = 595.28 - margin * 2;
 
-    function write(text: string, bold = false, size = 12) {
-      page.drawText(text, {
-        x: 40,
-        y,
-        size,
-        font: bold ? fontBold : font,
-        color: rgb(1, 1, 1),
-      });
-      y -= size + 6;
+    const text = contract.contractText || "Contrato não encontrado.";
+
+    function wrapText(text: string, maxChars: number) {
+      const words = text.split(" ");
+      const lines: string[] = [];
+      let line = "";
+
+      for (const word of words) {
+        if ((line + word).length > maxChars) {
+          lines.push(line.trim());
+          line = "";
+        }
+        line += word + " ";
+      }
+      if (line.trim()) lines.push(line.trim());
+      return lines;
     }
 
-    write("CONTRATO DE LOCAÇÃO RESIDENCIAL", true, 16);
-    y -= 10;
+    const lines = wrapText(text, 95);
 
-    write(`Contrato ID: ${contract.id}`, false, 11);
-    write(`Gerado em: ${new Date().toLocaleString("pt-BR")}`, false, 11);
-    y -= 8;
+    let y = 800;
+    for (const line of lines) {
+      if (y < 80) break;
+      page.drawText(line, {
+        x: margin,
+        y,
+        size: fontSize,
+        font,
+        maxWidth,
+      });
+      y -= 16;
+    }
 
-    write("DADOS DO LOCADOR", true, 13);
-    write(`Nome: ${ownerUser.name || "Locador"}`, false, 11);
-    write(`Email: ${ownerUser.email}`, false, 11);
-    y -= 10;
+    // ✅ info assinatura no rodapé
+    const ownerSigned = contract.ownerSignedAt ? "✅ Assinado" : "❌ Não assinado";
+    const tenantSigned = contract.tenantSignedAt ? "✅ Assinado" : "❌ Não assinado";
 
-    write("DADOS DO LOCATÁRIO (INQUILINO)", true, 13);
-    write(`Nome: ${tenantProfile.fullName}`, false, 11);
-    write(`Email: ${tenantProfile.email}`, false, 11);
-    write(`CPF: ${tenantProfile.cpf}`, false, 11);
-    write(`RG: ${tenantProfile.rg}`, false, 11);
-    write(
-      `Nascimento: ${tenantProfile.birthDate ? dateBR(tenantProfile.birthDate) : "-"}`,
-      false,
-      11
-    );
-    write(`Telefone: ${tenantProfile.phone}`, false, 11);
-    y -= 10;
+    page.drawText(`Locador: ${ownerSigned}`, {
+      x: margin,
+      y: 60,
+      size: 10,
+      font,
+    });
 
-    write("IMÓVEL / ENDEREÇO", true, 13);
-    write(`Endereço: ${tenantProfile.address}`, false, 11);
-    write(`CEP: ${tenantProfile.cep}`, false, 11);
-    write(`Cidade: ${tenantProfile.city}`, false, 11);
-    y -= 10;
+    page.drawText(`Locatário: ${tenantSigned}`, {
+      x: margin + 250,
+      y: 60,
+      size: 10,
+      font,
+    });
 
-    write("VALOR DO ALUGUEL", true, 13);
-    write(`Valor: ${moneyBRL(tenantProfile.rentValueCents)}`, false, 11);
-    y -= 10;
+    const pdfBytes = await pdfDoc.save();
 
-    write("ASSINATURAS", true, 13);
-    write(
-      `Locador: ${contract.ownerSignedAt ? "ASSINADO ✅" : "PENDENTE ❌"}`,
-      false,
-      11
-    );
-    write(
-      `Inquilino: ${contract.tenantSignedAt ? "ASSINADO ✅" : "PENDENTE ❌"}`,
-      false,
-      11
-    );
-    y -= 15;
-
-    // ✅ cidade e data automáticas (opção A que você pediu)
-    write(
-      `${tenantProfile.city}, ${new Date().toLocaleDateString("pt-BR")}.`,
-      false,
-      11
-    );
-
-    y -= 20;
-
-    write("__________________________________________", false, 11);
-    write("LOCADOR", true, 11);
-
-    y -= 10;
-
-    write("__________________________________________", false, 11);
-    write("LOCATÁRIO", true, 11);
-
-    const bytes = await pdfDoc.save();
-
-    return new NextResponse(bytes, {
-      status: 200,
+    return new NextResponse(Buffer.from(pdfBytes), {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `inline; filename="contrato-${contract.id}.pdf"`,
+        "Content-Disposition": `attachment; filename="contrato-${id}.pdf"`,
       },
     });
   } catch (err: any) {
     console.error("❌ Erro ao gerar PDF:", err?.message || err);
-    return NextResponse.json({ error: "Erro ao gerar PDF" }, { status: 500 });
+    return NextResponse.json({ error: "Erro interno no PDF" }, { status: 500 });
   }
 }
