@@ -59,7 +59,7 @@ export async function POST(
     const updated = await prisma.rentalContract.update({
       where: { id },
       data: {
-        ownerSignatureBase64: signatureBase64,
+        ownerSignatureDataUrl: signatureBase64,
         ownerSignedAt: new Date(),
       },
     });

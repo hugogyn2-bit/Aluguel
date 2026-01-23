@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -7,20 +6,20 @@ import { prisma } from "@/lib/prisma";
 export const runtime = "nodejs";
 
 export async function POST(
-  req: NextRequest,
+  _req: Request,
   context: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await context.params;
 
     const session = await getServerSession(authOptions);
-
     if (!session?.user?.email) {
       return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     }
 
     const user = await prisma.user.findUnique({
       where: { email: session.user.email },
+      select: { id: true, role: true },
     });
 
     if (!user) {
@@ -28,48 +27,47 @@ export async function POST(
     }
 
     if (user.role !== "OWNER") {
-      return NextResponse.json({ error: "Apenas OWNER pode assinar" }, { status: 403 });
+      return NextResponse.json({ error: "Apenas OWNER pode ativar" }, { status: 403 });
     }
 
     const contract = await prisma.rentalContract.findUnique({
       where: { id },
+      select: {
+        id: true,
+        ownerId: true,
+        ownerSignedAt: true,
+        tenantSignedAt: true,
+        status: true,
+      },
     });
 
     if (!contract) {
       return NextResponse.json({ error: "Contrato não encontrado" }, { status: 404 });
     }
 
-    // ✅ segurança: só o dono do contrato pode assinar
     if (contract.ownerId !== user.id) {
       return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
     }
 
-    // ✅ pega assinatura desenhada (base64) do body
-    const body = await req.json().catch(() => null);
-    const signatureDataUrl = body?.signatureDataUrl;
-
-    if (!signatureDataUrl || typeof signatureDataUrl !== "string") {
+    // ✅ só ativa se assinaturas existirem
+    if (!contract.ownerSignedAt || !contract.tenantSignedAt) {
       return NextResponse.json(
-        { error: "Assinatura obrigatória (signatureDataUrl)" },
+        { error: "Contrato precisa estar assinado por LOCADOR e LOCATÁRIO" },
         { status: 400 }
       );
     }
 
-    await prisma.rentalContract.update({
+    const updated = await prisma.rentalContract.update({
       where: { id },
-      data: {
-        ownerSignatureDataUrl: signatureDataUrl,
-        ownerSignedAt: new Date(),
-      },
+      data: { status: "ACTIVE" },
     });
 
-    return NextResponse.json({ message: "Contrato assinado pelo locador ✅" });
+    return NextResponse.json({
+      message: "Contrato ativado com sucesso",
+      contract: updated,
+    });
   } catch (err: any) {
-    console.error("❌ Erro ao assinar contrato (owner):", err?.message || err);
-
-    return NextResponse.json(
-      { error: "Erro interno ao assinar" },
-      { status: 500 }
-    );
+    console.error("❌ Erro activate contrato:", err?.message || err);
+    return NextResponse.json({ error: "Erro interno" }, { status: 500 });
   }
 }

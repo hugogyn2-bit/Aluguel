@@ -1,36 +1,123 @@
-{
-  "name": "aluga-app",
-  "version": "1.0.0",
-  "private": true,
-  "scripts": {
-    "dev": "next dev --turbopack",
-    "build": "prisma generate && prisma db push --force-reset && next build",
-    "start": "next start",
-    "lint": "next lint"
-  },
-  "dependencies": {
-    "@prisma/client": "^5.22.0",
-    "bcryptjs": "^2.4.3",
-    "clsx": "^2.1.1",
-    "lucide-react": "^0.451.0",
-    "next": "16.1.1",
-    "next-auth": "^4.24.10",
-    "pdf-lib": "^1.17.1",
-    "react": "18.3.1",
-    "react-dom": "18.3.1",
-    "stripe": "^16.12.0",
-    "tailwind-merge": "^2.5.4",
-    "zod": "^3.23.8"
-  },
-  "devDependencies": {
-    "@types/bcryptjs": "^2.4.6",
-    "@types/node": "^20",
-    "@types/react": "^18",
-    "@types/react-dom": "^18",
-    "autoprefixer": "^10.4.20",
-    "postcss": "^8.4.49",
-    "prisma": "^5.22.0",
-    "tailwindcss": "^3.4.15",
-    "typescript": "^5"
+import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { PDFDocument, StandardFonts } from "pdf-lib";
+
+export const runtime = "nodejs";
+
+function formatBRLFromCents(cents: number) {
+  const value = cents / 100;
+  return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+export async function GET(
+  _req: Request,
+  context: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await context.params;
+
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      select: { id: true, role: true },
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: "Usuário não encontrado" }, { status: 404 });
+    }
+
+    if (user.role !== "OWNER") {
+      return NextResponse.json({ error: "Apenas OWNER pode baixar" }, { status: 403 });
+    }
+
+    const contract = await prisma.rentalContract.findUnique({
+      where: { id },
+      include: {
+        tenantProfile: true,
+      },
+    });
+
+    if (!contract) {
+      return NextResponse.json({ error: "Contrato não encontrado" }, { status: 404 });
+    }
+
+    if (contract.ownerId !== user.id) {
+      return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
+    }
+
+    const pdfDoc = await PDFDocument.create();
+    const page = pdfDoc.addPage([595.28, 841.89]); // A4
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
+    const fontSize = 11;
+    const marginX = 40;
+    let y = 800;
+
+    const lines: string[] = [];
+
+    lines.push("CONTRATO DE LOCAÇÃO");
+    lines.push("");
+    lines.push(`Status: ${contract.status}`);
+    lines.push(`Cidade: ${contract.signedCity}`);
+    lines.push(`Data: ${new Date(contract.signedAtDate).toLocaleDateString("pt-BR")}`);
+    lines.push(`Valor do aluguel: ${formatBRLFromCents(contract.rentValueCents)}`);
+    lines.push("");
+    lines.push("DADOS DO INQUILINO:");
+    lines.push(`Nome: ${contract.tenantProfile.fullName}`);
+    lines.push(`CPF: ${contract.tenantProfile.cpf}`);
+    lines.push(`RG: ${contract.tenantProfile.rg}`);
+    lines.push(`Email: ${contract.tenantProfile.email}`);
+    lines.push(`Telefone: ${contract.tenantProfile.phone}`);
+    lines.push(`Endereço: ${contract.tenantProfile.address}`);
+    lines.push(`CEP: ${contract.tenantProfile.cep}`);
+    lines.push(`Cidade: ${contract.tenantProfile.city}`);
+    lines.push("");
+    lines.push("TEXTO DO CONTRATO:");
+    lines.push("");
+
+    // quebra o texto em várias linhas simples
+    const text = contract.contractText || "";
+    const textChunks = text.split("\n");
+
+    lines.push(...textChunks);
+
+    for (const line of lines) {
+      if (y < 60) {
+        // se acabou espaço, cria outra página
+        y = 800;
+        const newPage = pdfDoc.addPage([595.28, 841.89]);
+        newPage.drawText(line, { x: marginX, y, size: fontSize, font });
+        y -= 16;
+        continue;
+      }
+
+      page.drawText(line, {
+        x: marginX,
+        y,
+        size: fontSize,
+        font,
+      });
+
+      y -= 16;
+    }
+
+    const bytes = await pdfDoc.save();
+
+    return new NextResponse(bytes, {
+      status: 200,
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `attachment; filename="contrato-${id}.pdf"`,
+      },
+    });
+  } catch (err: any) {
+    console.error("❌ Erro PDF owner:", err?.message || err);
+    return NextResponse.json({ error: "Erro interno" }, { status: 500 });
   }
 }
