@@ -2,147 +2,171 @@
 
 import { useEffect, useRef, useState } from "react";
 
-type SignaturePadProps = {
-  value?: string | null;
-  onChange: (dataUrl: string | null) => void;
+type Props = {
+  onChange?: (dataUrl: string | null) => void;
+  height?: number;
 };
 
-export default function SignaturePad({ value, onChange }: SignaturePadProps) {
+export default function SignaturePad({ onChange, height = 160 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [isDrawing, setIsDrawing] = useState(false);
+  const drawing = useRef(false);
+  const [hasDrawn, setHasDrawn] = useState(false);
 
-  function getCanvas() {
+  function getCtx() {
     const canvas = canvasRef.current;
     if (!canvas) return null;
-    return canvas;
+    return canvas.getContext("2d");
   }
 
-  function clear() {
-    const canvas = getCanvas();
+  function resizeCanvas() {
+    const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const ctx = canvas.getContext("2d");
+    // melhora qualidade em telas retina
+    const parent = canvas.parentElement;
+    if (!parent) return;
+
+    const rect = parent.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+
+    const newWidth = Math.floor(rect.width);
+    const newHeight = height;
+
+    canvas.width = newWidth * dpr;
+    canvas.height = newHeight * dpr;
+
+    canvas.style.width = `${newWidth}px`;
+    canvas.style.height = `${newHeight}px`;
+
+    const ctx = getCtx();
     if (!ctx) return;
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    onChange(null);
+    ctx.scale(dpr, dpr);
+
+    // background branco
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, newWidth, newHeight);
+
+    // estilo do traço
+    ctx.strokeStyle = "#000000";
+    ctx.lineWidth = 2;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
   }
 
-  function drawStart(x: number, y: number) {
-    const canvas = getCanvas();
-    if (!canvas) return;
+  useEffect(() => {
+    resizeCanvas();
+    window.addEventListener("resize", resizeCanvas);
+    return () => window.removeEventListener("resize", resizeCanvas);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-    const ctx = canvas.getContext("2d");
+  function getPosition(e: any) {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+
+    const rect = canvas.getBoundingClientRect();
+
+    // mouse
+    if (e.clientX !== undefined && e.clientY !== undefined) {
+      return {
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top,
+      };
+    }
+
+    // touch
+    const t = e.touches?.[0];
+    if (t) {
+      return {
+        x: t.clientX - rect.left,
+        y: t.clientY - rect.top,
+      };
+    }
+
+    return { x: 0, y: 0 };
+  }
+
+  function startDraw(e: any) {
+    e.preventDefault();
+    drawing.current = true;
+
+    const ctx = getCtx();
     if (!ctx) return;
 
+    const { x, y } = getPosition(e);
     ctx.beginPath();
     ctx.moveTo(x, y);
   }
 
-  function drawLine(x: number, y: number) {
-    const canvas = getCanvas();
-    if (!canvas) return;
+  function draw(e: any) {
+    e.preventDefault();
+    if (!drawing.current) return;
 
-    const ctx = canvas.getContext("2d");
+    const ctx = getCtx();
     if (!ctx) return;
 
+    const { x, y } = getPosition(e);
     ctx.lineTo(x, y);
-    ctx.strokeStyle = "#111827";
-    ctx.lineWidth = 2.2;
-    ctx.lineCap = "round";
     ctx.stroke();
+
+    if (!hasDrawn) setHasDrawn(true);
   }
 
-  function getPointFromEvent(e: any) {
-    const canvas = getCanvas();
-    if (!canvas) return null;
-
-    const rect = canvas.getBoundingClientRect();
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-
-    return {
-      x: clientX - rect.left,
-      y: clientY - rect.top,
-    };
-  }
-
-  function handleDown(e: any) {
+  function endDraw(e: any) {
     e.preventDefault();
-    const p = getPointFromEvent(e);
-    if (!p) return;
+    drawing.current = false;
 
-    setIsDrawing(true);
-    drawStart(p.x, p.y);
-  }
-
-  function handleMove(e: any) {
-    e.preventDefault();
-    if (!isDrawing) return;
-
-    const p = getPointFromEvent(e);
-    if (!p) return;
-
-    drawLine(p.x, p.y);
-  }
-
-  function handleUp(e: any) {
-    e.preventDefault();
-    if (!isDrawing) return;
-
-    setIsDrawing(false);
-
-    const canvas = getCanvas();
+    const canvas = canvasRef.current;
     if (!canvas) return;
 
     const dataUrl = canvas.toDataURL("image/png");
-    onChange(dataUrl);
+    onChange?.(hasDrawn ? dataUrl : null);
   }
 
-  // se já tiver assinatura salva, desenha no canvas
-  useEffect(() => {
-    if (!value) return;
-    const canvas = getCanvas();
+  function clear() {
+    const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const ctx = canvas.getContext("2d");
+    const ctx = getCtx();
     if (!ctx) return;
 
-    const img = new Image();
-    img.src = value;
-    img.onload = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(img, 0, 0);
-    };
-  }, [value]);
+    const w = canvas.clientWidth;
+    const h = canvas.clientHeight;
+
+    ctx.clearRect(0, 0, w, h);
+
+    // background branco
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, w, h);
+
+    setHasDrawn(false);
+    onChange?.(null);
+  }
 
   return (
     <div className="w-full">
-      <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+      <div className="rounded-xl overflow-hidden border border-white/10 bg-white/5">
         <canvas
           ref={canvasRef}
-          width={600}
-          height={180}
-          className="w-full bg-white rounded-xl"
-          onMouseDown={handleDown}
-          onMouseMove={handleMove}
-          onMouseUp={handleUp}
-          onMouseLeave={handleUp}
-          onTouchStart={handleDown}
-          onTouchMove={handleMove}
-          onTouchEnd={handleUp}
+          className="w-full touch-none bg-white"
+          onMouseDown={startDraw}
+          onMouseMove={draw}
+          onMouseUp={endDraw}
+          onMouseLeave={endDraw}
+          onTouchStart={startDraw}
+          onTouchMove={draw}
+          onTouchEnd={endDraw}
         />
       </div>
 
-      <div className="mt-3 flex gap-2">
-        <button
-          type="button"
-          onClick={clear}
-          className="rounded-xl px-4 py-2 bg-red-500/20 border border-red-500/30 hover:bg-red-500/30 text-white"
-        >
-          Limpar
-        </button>
-      </div>
+      <button
+        type="button"
+        onClick={clear}
+        className="mt-2 rounded-xl px-4 py-2 bg-white/10 border border-white/10 hover:bg-white/15 text-sm"
+      >
+        🧽 Limpar assinatura
+      </button>
     </div>
   );
 }

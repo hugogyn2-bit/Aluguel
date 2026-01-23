@@ -12,34 +12,32 @@ export async function GET() {
     return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
   }
 
-  const user = await prisma.user.findUnique({
+  const me = await prisma.user.findUnique({
     where: { email: session.user.email },
-    include: {
-      tenantProfile: true,
+    select: {
+      email: true,
+      name: true,
+      role: true,
+      tenantProfile: {
+        select: {
+          fullName: true,
+          cpf: true,
+          rg: true,
+          address: true,
+          cep: true,
+          phone: true,
+        },
+      },
     },
   });
 
-  if (!user) {
+  if (!me) {
     return NextResponse.json({ error: "Usuário não encontrado" }, { status: 404 });
   }
 
-  if (user.role !== "TENANT") {
-    return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
+  if (me.role !== "TENANT") {
+    return NextResponse.json({ error: "Apenas TENANT" }, { status: 403 });
   }
 
-  if (!user.tenantProfile) {
-    return NextResponse.json(
-      { error: "TenantProfile não encontrado" },
-      { status: 404 }
-    );
-  }
-
-  return NextResponse.json({
-    fullName: user.tenantProfile.fullName,
-    cpf: user.tenantProfile.cpf,
-    rg: user.tenantProfile.rg,
-    address: user.tenantProfile.address,
-    cep: user.tenantProfile.cep,
-    birthDate: user.birthDate ? user.birthDate.toISOString().slice(0, 10) : null,
-  });
+  return NextResponse.json({ me });
 }

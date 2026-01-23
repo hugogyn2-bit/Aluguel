@@ -5,7 +5,7 @@ import { getToken } from "next-auth/jwt";
 export async function middleware(req: NextRequest) {
   const pathname = req.nextUrl.pathname;
 
-  // ✅ libera arquivos estáticos e rotas públicas
+  // ✅ liberar estáticos e rotas públicas
   if (
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon.ico") ||
@@ -21,25 +21,40 @@ export async function middleware(req: NextRequest) {
     secret: process.env.NEXTAUTH_SECRET,
   });
 
-  // ✅ qualquer área protegida precisa de login
-  if (!token) {
+  // ✅ se não logou e tentou acessar tenant/owner -> manda pro login
+  if (!token && (pathname.startsWith("/owner") || pathname.startsWith("/tenant"))) {
     return NextResponse.redirect(new URL("/auth/sign-in", req.url));
   }
 
-  // ✅ protege tudo de /owner (somente OWNER)
+  // ✅ BLOQUEIA TENANT ENTRAR NO OWNER
   if (pathname.startsWith("/owner")) {
-    if (token.role !== "OWNER") {
-      // TENANT ou outro -> manda pro painel do tenant
+    if (!token) {
+      return NextResponse.redirect(new URL("/auth/sign-in", req.url));
+    }
+
+    const role = (token as any)?.role;
+
+    if (role !== "OWNER") {
+      // TENANT tentando acessar /owner -> manda pra área tenant
       return NextResponse.redirect(new URL("/tenant", req.url));
     }
+
     return NextResponse.next();
   }
 
-  // ✅ protege tudo de /tenant (somente TENANT)
+  // ✅ BLOQUEIA OWNER ENTRAR NO TENANT
   if (pathname.startsWith("/tenant")) {
-    if (token.role !== "TENANT") {
+    if (!token) {
+      return NextResponse.redirect(new URL("/auth/sign-in", req.url));
+    }
+
+    const role = (token as any)?.role;
+
+    if (role !== "TENANT") {
+      // OWNER tentando acessar /tenant -> manda pra área owner
       return NextResponse.redirect(new URL("/owner", req.url));
     }
+
     return NextResponse.next();
   }
 

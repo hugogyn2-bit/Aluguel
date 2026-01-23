@@ -7,8 +7,86 @@ import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 
-function onlyDigits(v: string) {
-  return (v || "").replace(/\D/g, "");
+function onlyNumbers(value: string) {
+  return value.replace(/\D/g, "");
+}
+
+function parseBirthDateBR(birthDate: string) {
+  // "dd/mm/aaaa" -> Date
+  const [dd, mm, yyyy] = birthDate.split("/");
+  const d = Number(dd);
+  const m = Number(mm);
+  const y = Number(yyyy);
+
+  if (!d || !m || !y) return null;
+
+  const date = new Date(Date.UTC(y, m - 1, d));
+  if (isNaN(date.getTime())) return null;
+
+  return date;
+}
+
+function rentToCentsBR(value: string) {
+  // aceita "29,90" ou "29.90" ou "1.234,56"
+  const cleaned = value
+    .replace(/\./g, "")
+    .replace(",", ".")
+    .trim();
+
+  const n = Number(cleaned);
+  if (isNaN(n)) return null;
+  return Math.round(n * 100);
+}
+
+function generateContractText(params: {
+  city: string;
+  fullName: string;
+  cpf: string;
+  rg: string;
+  address: string;
+  cep: string;
+  email: string;
+  phone: string;
+  rentValueCents: number;
+  createdAt: Date;
+}) {
+  const rentBR = (params.rentValueCents / 100).toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  });
+
+  const dateBR = params.createdAt.toLocaleDateString("pt-BR");
+
+  return `
+CONTRATO DE LOCAÇÃO RESIDENCIAL (OPÇÃO A)
+
+CIDADE: ${params.city}
+DATA: ${dateBR}
+
+LOCATÁRIO (INQUILINO):
+Nome: ${params.fullName}
+CPF: ${params.cpf}
+RG: ${params.rg}
+E-mail: ${params.email}
+Telefone: ${params.phone}
+
+ENDEREÇO DO IMÓVEL LOCADO:
+${params.address}
+CEP: ${params.cep}
+Cidade: ${params.city}
+
+VALOR DO ALUGUEL:
+${rentBR}
+
+CLÁUSULAS:
+1) O LOCATÁRIO declara estar ciente e de acordo com os termos de locação.
+2) O pagamento deverá ser realizado mensalmente conforme combinado entre as partes.
+3) Este contrato será válido após assinatura digital de ambas as partes.
+
+ASSINATURAS:
+- LOCADOR (PROPRIETÁRIO): Assinatura digital (desenho)
+- LOCATÁRIO (INQUILINO): Assinatura digital (desenho)
+`.trim();
 }
 
 export async function POST(req: Request) {
@@ -24,113 +102,137 @@ export async function POST(req: Request) {
     });
 
     if (!owner || owner.role !== "OWNER") {
-      return NextResponse.json({ error: "Apenas OWNER" }, { status: 403 });
+      return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
     }
 
     const body = await req.json();
 
-    const fullName = (body.fullName || "").trim();
-    const email = (body.email || "").trim().toLowerCase();
-    const address = (body.address || "").trim();
-    const cep = (body.cep || "").trim();
-    const city = (body.city || "").trim();
-    const cpf = onlyDigits(body.cpf || "");
-    const rg = (body.rg || "").trim();
-    const phone = (body.phone || "").trim();
+    const {
+      fullName,
+      email,
+      cpf,
+      rg,
+      address,
+      cep,
+      city,
+      phone,
+      birthDate, // dd/mm/aaaa
+      rentValue, // "29,90"
+    } = body;
 
-    const rentValue = (body.rentValue || "").toString().trim(); // "29,90" ou "1200"
-
-    if (!fullName || !email || !address || !cep || !city || !cpf || !rg || !phone || !rentValue) {
-      return NextResponse.json({ error: "Preencha todos os campos" }, { status: 400 });
+    if (
+      !fullName ||
+      !email ||
+      !cpf ||
+      !rg ||
+      !address ||
+      !cep ||
+      !city ||
+      !phone ||
+      !birthDate ||
+      !rentValue
+    ) {
+      return NextResponse.json(
+        { error: "Preencha todos os campos do inquilino." },
+        { status: 400 }
+      );
     }
 
-    // converte aluguel para centavos (aceita 1200, 1200.00, 1.200,00 etc)
-    const normalized = rentValue
-      .replace(/\./g, "")
-      .replace(",", ".")
-      .replace(/[^\d.]/g, "");
+    const cpfClean = onlyNumbers(cpf);
+    const cepClean = onlyNumbers(cep);
+    const phoneClean = onlyNumbers(phone);
 
-    const rentValueFloat = Number(normalized);
-    if (!rentValueFloat || rentValueFloat <= 0) {
-      return NextResponse.json({ error: "Valor do aluguel inválido" }, { status: 400 });
+    if (cpfClean.length !== 11) {
+      return NextResponse.json({ error: "CPF inválido." }, { status: 400 });
     }
 
-    const rentValueCents = Math.round(rentValueFloat * 100);
-
-    const existsEmail = await prisma.user.findUnique({ where: { email } });
-    if (existsEmail) {
-      return NextResponse.json({ error: "Já existe usuário com esse e-mail" }, { status: 400 });
+    if (cepClean.length !== 8) {
+      return NextResponse.json({ error: "CEP inválido." }, { status: 400 });
     }
 
-    const existsCpf = await prisma.tenantProfile.findUnique({
-      where: { cpf },
-    });
-
-    if (existsCpf) {
-      return NextResponse.json({ error: "CPF já cadastrado" }, { status: 400 });
+    const parsedBirthDate = parseBirthDateBR(birthDate);
+    if (!parsedBirthDate) {
+      return NextResponse.json(
+        { error: "Data de nascimento inválida (use dd/mm/aaaa)." },
+        { status: 400 }
+      );
     }
 
-    // senha automática 123456 + mustChangePassword
-    const passwordHash = await bcrypt.hash("123456", 10);
+    const rentValueCents = rentToCentsBR(String(rentValue));
+    if (!rentValueCents || rentValueCents <= 0) {
+      return NextResponse.json(
+        { error: "Valor do aluguel inválido." },
+        { status: 400 }
+      );
+    }
 
-    // ✅ cria tenant (User) + profile + contrato tudo junto
-    const created = await prisma.$transaction(async (tx) => {
+    // ✅ cria senha padrão do tenant
+    const defaultPassword = "123456";
+    const passwordHash = await bcrypt.hash(defaultPassword, 10);
+
+    const now = new Date();
+
+    // ✅ cria tudo em transação
+    const result = await prisma.$transaction(async (tx) => {
+      // 1) cria User TENANT
       const tenantUser = await tx.user.create({
         data: {
           email,
           name: fullName,
           passwordHash,
           role: "TENANT",
+          cpf: cpfClean,
+          birthDate: parsedBirthDate,
           mustChangePassword: true,
         },
       });
 
+      // 2) cria TenantProfile
       const tenantProfile = await tx.tenantProfile.create({
         data: {
           userId: tenantUser.id,
           ownerId: owner.id,
 
           fullName,
-          cpf,
+          cpf: cpfClean,
           rg,
+          email,
+          phone: phoneClean,
+
           address,
-          cep,
+          cep: cepClean,
           city,
-          phone,
+
+          birthDate: parsedBirthDate,
 
           rentValueCents,
         },
       });
 
-      // ✅ contrato preenchido automaticamente (cidade + data do dia)
-      const today = new Date();
-
-      const contractText = `
-CONTRATO DE LOCAÇÃO
-
-Assinado em ${city}, na data ${today.toLocaleDateString("pt-BR")}.
-
-LOCADOR: ${owner.name ?? "Proprietário"}
-INQUILINO: ${fullName}
-CPF: ${cpf}
-RG: ${rg}
-ENDEREÇO: ${address}
-CEP: ${cep}
-TELEFONE: ${phone}
-
-VALOR DO ALUGUEL: R$ ${(rentValueCents / 100).toFixed(2).replace(".", ",")}
-
-(Conteúdo do contrato completo será exibido na tela e validado por assinatura digital)
-      `.trim();
+      // 3) cria contrato preenchido
+      const contractText = generateContractText({
+        city,
+        fullName,
+        cpf: cpfClean,
+        rg,
+        address,
+        cep: cepClean,
+        email,
+        phone: phoneClean,
+        rentValueCents,
+        createdAt: now,
+      });
 
       const contract = await tx.rentalContract.create({
         data: {
           tenantProfileId: tenantProfile.id,
           ownerId: owner.id,
-          status: "DRAFT",
+          status: "PENDING_SIGNATURES",
+
           contractText,
           signedCity: city,
-          signedAtDate: today,
+          signedAtDate: now,
+
           rentValueCents,
         },
       });
@@ -139,13 +241,17 @@ VALOR DO ALUGUEL: R$ ${(rentValueCents / 100).toFixed(2).replace(".", ",")}
     });
 
     return NextResponse.json({
-      message: "Inquilino cadastrado com sucesso ✅",
-      tenantEmail: created.tenantUser.email,
-      tenantPassword: "123456",
-      contractId: created.contract.id,
+      message: "✅ Inquilino cadastrado e contrato gerado com sucesso!",
+      tenantId: result.tenantProfile.id,
+      contractId: result.contract.id,
+      defaultPassword: "123456",
+      mustChangePassword: true,
     });
   } catch (err: any) {
-    console.error("❌ Erro ao criar tenant:", err?.message || err);
-    return NextResponse.json({ error: "Erro interno" }, { status: 500 });
+    console.error("❌ Erro ao criar tenant + contrato:", err?.message || err);
+    return NextResponse.json(
+      { error: "Erro interno ao cadastrar inquilino." },
+      { status: 500 }
+    );
   }
 }
