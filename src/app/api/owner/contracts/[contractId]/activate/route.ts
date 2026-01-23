@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 
 import { authOptions } from "@/lib/auth";
@@ -7,10 +8,12 @@ import { prisma } from "@/lib/prisma";
 export const runtime = "nodejs";
 
 export async function POST(
-  req: Request,
-  { params }: { params: { contractId: string } }
+  req: NextRequest,
+  { params }: { params: Promise<{ contractId: string }> }
 ) {
   try {
+    const { contractId } = await params;
+
     const session = await getServerSession(authOptions);
 
     if (!session?.user?.email) {
@@ -21,12 +24,16 @@ export async function POST(
       where: { email: session.user.email },
     });
 
-    if (!owner || owner.role !== "OWNER") {
-      return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
+    if (!owner) {
+      return NextResponse.json({ error: "Usuário não encontrado" }, { status: 404 });
+    }
+
+    if (owner.role !== "OWNER") {
+      return NextResponse.json({ error: "Apenas OWNER pode ativar" }, { status: 403 });
     }
 
     const contract = await prisma.rentalContract.findUnique({
-      where: { id: params.contractId },
+      where: { id: contractId },
     });
 
     if (!contract) {
@@ -34,29 +41,23 @@ export async function POST(
     }
 
     if (contract.ownerId !== owner.id) {
-      return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
-    }
-
-    if (!contract.ownerSignatureDataUrl || !contract.tenantSignatureDataUrl) {
-      return NextResponse.json(
-        { error: "O contrato só pode ser ativado quando ambos assinarem." },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Esse contrato não é seu" }, { status: 403 });
     }
 
     const updated = await prisma.rentalContract.update({
-      where: { id: contract.id },
+      where: { id: contractId },
       data: {
-        status: "ACTIVE",
+        active: true,
       },
     });
 
     return NextResponse.json({
-      message: "✅ Contrato ATIVADO com sucesso!",
+      message: "Contrato ativado ✅",
       contract: updated,
     });
   } catch (err: any) {
-    console.error("❌ Erro activate-contract:", err?.message || err);
+    console.error("❌ Erro ao ativar contrato:", err?.message || err);
+
     return NextResponse.json(
       { error: "Erro interno ao ativar contrato" },
       { status: 500 }

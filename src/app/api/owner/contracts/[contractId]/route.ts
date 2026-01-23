@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 
 import { authOptions } from "@/lib/auth";
@@ -7,10 +8,12 @@ import { prisma } from "@/lib/prisma";
 export const runtime = "nodejs";
 
 export async function GET(
-  req: Request,
-  { params }: { params: { contractId: string } }
+  req: NextRequest,
+  { params }: { params: Promise<{ contractId: string }> }
 ) {
   try {
+    const { contractId } = await params;
+
     const session = await getServerSession(authOptions);
 
     if (!session?.user?.email) {
@@ -21,14 +24,23 @@ export async function GET(
       where: { email: session.user.email },
     });
 
-    if (!owner || owner.role !== "OWNER") {
-      return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
+    if (!owner) {
+      return NextResponse.json({ error: "Usuário não encontrado" }, { status: 404 });
+    }
+
+    if (owner.role !== "OWNER") {
+      return NextResponse.json({ error: "Apenas OWNER" }, { status: 403 });
     }
 
     const contract = await prisma.rentalContract.findUnique({
-      where: { id: params.contractId },
+      where: { id: contractId },
       include: {
-        tenantProfile: true,
+        tenant: {
+          include: {
+            user: true,
+          },
+        },
+        owner: true,
       },
     });
 
@@ -37,14 +49,12 @@ export async function GET(
     }
 
     if (contract.ownerId !== owner.id) {
-      return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
+      return NextResponse.json({ error: "Esse contrato não é seu" }, { status: 403 });
     }
 
-    return NextResponse.json({
-      contract,
-    });
+    return NextResponse.json({ contract });
   } catch (err: any) {
-    console.error("❌ Erro ao buscar contrato (owner):", err?.message || err);
+    console.error("❌ Erro ao buscar contrato:", err?.message || err);
     return NextResponse.json(
       { error: "Erro interno ao buscar contrato" },
       { status: 500 }
