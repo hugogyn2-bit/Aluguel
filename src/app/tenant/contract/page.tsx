@@ -1,21 +1,22 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import SignaturePad from "@/components/SignaturePad";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-type Contract = {
+type ContractData = {
   id: string;
-  status: string;
-
-  contractText: string;
-
-  signedCity: string | null;
-  signedAtDate: string | null;
-
+  tenantName: string;
+  tenantEmail: string;
+  tenantCpf: string;
+  tenantRg: string;
+  tenantBirthDate: string;
+  tenantAddress: string;
+  tenantCep: string;
+  tenantCity: string;
+  tenantPhone: string;
   rentValueCents: number;
 
-  ownerSignatureDataUrl: string | null;
-  tenantSignatureDataUrl: string | null;
+  ownerName: string;
+  ownerEmail: string;
 
   ownerSignedAt: string | null;
   tenantSignedAt: string | null;
@@ -23,203 +24,295 @@ type Contract = {
 
 export default function TenantContractPage() {
   const [loading, setLoading] = useState(true);
-  const [contract, setContract] = useState<Contract | null>(null);
+  const [contract, setContract] = useState<ContractData | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const [sigDataUrl, setSigDataUrl] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [downloading, setDownloading] = useState(false);
+  const [signing, setSigning] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
 
-  const [msg, setMsg] = useState<string>("");
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const drawingRef = useRef(false);
 
-  async function loadContract() {
+  const rentFormatted = useMemo(() => {
+    if (!contract) return "";
+    return (contract.rentValueCents / 100).toLocaleString("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+    });
+  }, [contract]);
+
+  function formatBRDate(dateISO: string) {
+    const d = new Date(dateISO);
+    return d.toLocaleDateString("pt-BR");
+  }
+
+  function clearCanvas() {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }
+
+  function getSignatureDataUrl() {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+    return canvas.toDataURL("image/png");
+  }
+
+  function startDraw(e: React.PointerEvent<HTMLCanvasElement>) {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    drawingRef.current = true;
+    canvas.setPointerCapture(e.pointerId);
+
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+  }
+
+  function draw(e: React.PointerEvent<HTMLCanvasElement>) {
+    if (!drawingRef.current) return;
+
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    ctx.lineWidth = 2;
+    ctx.lineCap = "round";
+    ctx.strokeStyle = "white";
+    ctx.lineTo(x, y);
+    ctx.stroke();
+  }
+
+  function endDraw() {
+    drawingRef.current = false;
+  }
+
+  async function loadMyContract() {
     setLoading(true);
-    setMsg("");
+    setError(null);
 
     try {
       const res = await fetch(`/api/tenant/contract`);
       const data = await res.json();
 
       if (!res.ok) {
-        setMsg(data?.error || "Erro ao buscar contrato.");
-        setContract(null);
+        setError(data?.error || "Erro ao carregar contrato");
         return;
       }
 
       setContract(data.contract);
     } catch {
-      setMsg("Erro interno ao carregar contrato.");
-      setContract(null);
+      setError("Erro interno ao carregar contrato");
     } finally {
       setLoading(false);
     }
   }
 
-  async function saveTenantSignature() {
-    if (!sigDataUrl) {
-      setMsg("Desenhe sua assinatura antes de salvar.");
-      return;
-    }
-
-    setSaving(true);
-    setMsg("");
+  async function tenantSign() {
+    setSigning(true);
+    setMessage(null);
 
     try {
-      const res = await fetch(`/api/tenant/contract/sign`, {
+      const signature = getSignatureDataUrl();
+      if (!signature) {
+        setMessage("Assine antes de enviar.");
+        return;
+      }
+
+      const res = await fetch(`/api/tenant/contract/tenant-sign`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ signatureDataUrl: sigDataUrl }),
+        body: JSON.stringify({ signature }),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
-        setMsg(data?.error || "Erro ao assinar contrato.");
+        setMessage(data?.error || "Erro ao assinar");
         return;
       }
 
-      setMsg("✅ Sua assinatura foi registrada!");
-      await loadContract();
+      setMessage("✅ Assinatura do inquilino registrada!");
+      clearCanvas();
+      await loadMyContract();
     } catch {
-      setMsg("Erro interno ao salvar assinatura.");
+      setMessage("Erro interno ao assinar");
     } finally {
-      setSaving(false);
-    }
-  }
-
-  async function downloadPdf() {
-    setDownloading(true);
-    setMsg("");
-
-    try {
-      // abre download direto
-      window.open("/api/tenant/contract/pdf", "_blank");
-    } finally {
-      setDownloading(false);
+      setSigning(false);
     }
   }
 
   useEffect(() => {
-    loadContract();
+    loadMyContract();
   }, []);
 
   if (loading) {
     return (
-      <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
+      <div className="min-h-screen bg-black text-white flex items-center justify-center">
         Carregando contrato...
       </div>
     );
   }
 
-  if (!contract) {
+  if (error || !contract) {
     return (
-      <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
-        <h1 className="text-xl font-bold">Meu Contrato</h1>
-        <p className="text-white/70 mt-2">{msg || "Contrato não encontrado."}</p>
+      <div className="min-h-screen bg-black text-white flex items-center justify-center px-4">
+        <div className="max-w-lg w-full border border-white/10 bg-white/5 rounded-2xl p-6">
+          <h1 className="text-xl font-bold">Erro</h1>
+          <p className="mt-2 text-white/70">{error || "Contrato não encontrado"}</p>
+        </div>
       </div>
     );
   }
 
-  const rentBR = (contract.rentValueCents / 100).toLocaleString("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  });
+  const tenantAlreadySigned = !!contract.tenantSignedAt;
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur-xl">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <h1 className="text-2xl font-extrabold">📄 Meu Contrato</h1>
+    <div className="min-h-screen bg-black text-white px-4 py-10">
+      <div className="mx-auto max-w-4xl border border-white/10 bg-white/5 rounded-2xl p-6 backdrop-blur-xl">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-extrabold">📄 Contrato de Locação</h1>
+            <p className="text-white/60 text-sm">
+              Seu contrato ID: <span className="text-white">{contract.id}</span>
+            </p>
+          </div>
 
-        <span className="text-xs px-3 py-1 rounded-full border border-white/10 bg-white/10">
-          Status: <b>{contract.status}</b>
-        </span>
-      </div>
-
-      <div className="mt-3 text-sm text-white/70">
-        Valor do aluguel: <span className="text-white font-semibold">{rentBR}</span>
-      </div>
-
-      {msg ? (
-        <div className="mt-4 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/80">
-          {msg}
+          <button
+            onClick={() => window.open(`/api/contracts/${contract.id}/pdf`, "_blank")}
+            className="rounded-xl px-4 py-3 bg-white/10 border border-white/10 hover:bg-white/15"
+          >
+            📄 Baixar contrato PDF
+          </button>
         </div>
-      ) : null}
 
-      {/* ✅ Botão baixar PDF */}
-      <div className="mt-5">
-        <button
-          onClick={downloadPdf}
-          disabled={downloading}
-          className="w-full rounded-xl bg-white/10 border border-white/10 px-4 py-3 font-semibold hover:bg-white/15 disabled:opacity-60"
-        >
-          {downloading ? "Gerando PDF..." : "⬇️ Baixar contrato em PDF"}
-        </button>
-      </div>
+        <div className="mt-6 border border-white/10 rounded-2xl bg-black/30 p-5 text-sm leading-6 text-white/85">
+          <p>
+            <b>Locador:</b> {contract.ownerName} ({contract.ownerEmail})
+          </p>
+          <p className="mt-2">
+            <b>Locatário:</b> {contract.tenantName} ({contract.tenantEmail})
+          </p>
 
-      {/* CONTRATO */}
-      <div className="mt-6">
-        <h2 className="text-lg font-bold mb-2">Texto do contrato</h2>
+          <div className="mt-4 grid md:grid-cols-2 gap-3">
+            <p>
+              <b>CPF:</b> {contract.tenantCpf}
+            </p>
+            <p>
+              <b>RG:</b> {contract.tenantRg}
+            </p>
+            <p>
+              <b>Nascimento:</b> {formatBRDate(contract.tenantBirthDate)}
+            </p>
+            <p>
+              <b>Telefone:</b> {contract.tenantPhone}
+            </p>
+          </div>
 
-        <pre className="whitespace-pre-wrap rounded-xl border border-white/10 bg-black/40 p-4 text-sm text-white/80 leading-relaxed">
-          {contract.contractText}
-        </pre>
-      </div>
+          <div className="mt-4">
+            <p>
+              <b>Endereço:</b> {contract.tenantAddress}
+            </p>
+            <p>
+              <b>CEP:</b> {contract.tenantCep} — <b>Cidade:</b> {contract.tenantCity}
+            </p>
+          </div>
 
-      {/* ASSINATURA LOCADOR */}
-      <div className="mt-8">
-        <h2 className="text-lg font-bold mb-2">Assinatura do LOCADOR</h2>
+          <div className="mt-4">
+            <p>
+              <b>Valor do aluguel:</b> {rentFormatted}
+            </p>
+          </div>
 
-        {contract.ownerSignatureDataUrl ? (
-          <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-            <p className="text-sm text-white/70 mb-3">
-              ✅ O proprietário já assinou este contrato.
+          <div className="mt-6 text-white/60">
+            <p>
+              ✅ Assinatura do locador:{" "}
+              {contract.ownerSignedAt ? (
+                <span className="text-green-300 font-semibold">
+                  OK ({new Date(contract.ownerSignedAt).toLocaleString("pt-BR")})
+                </span>
+              ) : (
+                <span className="text-red-300 font-semibold">Pendente</span>
+              )}
             </p>
 
-            <img
-              src={contract.ownerSignatureDataUrl}
-              alt="Assinatura do locador"
-              className="bg-white rounded-lg p-2 max-w-full"
-            />
+            <p className="mt-1">
+              ✅ Sua assinatura:{" "}
+              {contract.tenantSignedAt ? (
+                <span className="text-green-300 font-semibold">
+                  OK ({new Date(contract.tenantSignedAt).toLocaleString("pt-BR")})
+                </span>
+              ) : (
+                <span className="text-red-300 font-semibold">Pendente</span>
+              )}
+            </p>
           </div>
-        ) : (
-          <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-            <p className="text-sm text-white/70">⏳ O proprietário ainda não assinou.</p>
-          </div>
-        )}
-      </div>
+        </div>
 
-      {/* ASSINATURA LOCATÁRIO */}
-      <div className="mt-8">
-        <h2 className="text-lg font-bold mb-2">Minha assinatura (LOCATÁRIO)</h2>
+        {/* ✅ Assinatura inquilino */}
+        <div className="mt-6 border border-white/10 rounded-2xl bg-white/5 p-5">
+          <h2 className="text-lg font-bold">✍️ Assinatura do Inquilino</h2>
+          <p className="text-white/60 text-sm mt-1">
+            Apenas o <b>inquilino</b> pode assinar aqui.
+          </p>
 
-        {contract.tenantSignatureDataUrl ? (
-          <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-            <p className="text-sm text-white/70 mb-3">
+          {tenantAlreadySigned ? (
+            <div className="mt-4 rounded-xl border border-green-500/30 bg-green-500/10 p-4 text-sm">
               ✅ Você já assinou este contrato.
-            </p>
+            </div>
+          ) : (
+            <>
+              <div className="mt-4">
+                <canvas
+                  ref={canvasRef}
+                  width={800}
+                  height={180}
+                  onPointerDown={startDraw}
+                  onPointerMove={draw}
+                  onPointerUp={endDraw}
+                  onPointerLeave={endDraw}
+                  className="w-full rounded-xl border border-white/10 bg-black"
+                />
+              </div>
 
-            <img
-              src={contract.tenantSignatureDataUrl}
-              alt="Assinatura do locatário"
-              className="bg-white rounded-lg p-2 max-w-full"
-            />
-          </div>
-        ) : (
-          <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-            <p className="text-sm text-white/70 mb-3">
-              Desenhe sua assinatura abaixo:
-            </p>
+              <div className="mt-3 flex flex-col md:flex-row gap-3">
+                <button
+                  onClick={clearCanvas}
+                  className="rounded-xl px-4 py-3 bg-white/10 border border-white/10 hover:bg-white/15"
+                >
+                  🧹 Limpar
+                </button>
 
-            <SignaturePad onChange={setSigDataUrl} />
+                <button
+                  onClick={tenantSign}
+                  disabled={signing}
+                  className="rounded-xl px-4 py-3 bg-gradient-to-r from-cyan-500 via-fuchsia-500 to-purple-600 font-semibold hover:opacity-95 disabled:opacity-60"
+                >
+                  {signing ? "Assinando..." : "✅ Assinar como Inquilino"}
+                </button>
+              </div>
+            </>
+          )}
 
-            <button
-              onClick={saveTenantSignature}
-              disabled={saving}
-              className="mt-4 w-full rounded-xl bg-gradient-to-r from-cyan-500 via-fuchsia-500 to-purple-600 px-4 py-3 font-semibold hover:opacity-95 disabled:opacity-60"
-            >
-              {saving ? "Salvando assinatura..." : "✅ Assinar como LOCATÁRIO"}
-            </button>
-          </div>
-        )}
+          {message ? (
+            <div className="mt-4 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/80">
+              {message}
+            </div>
+          ) : null}
+        </div>
       </div>
     </div>
   );
