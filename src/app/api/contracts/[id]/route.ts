@@ -6,33 +6,21 @@ import { prisma } from "@/lib/prisma";
 export const runtime = "nodejs";
 
 export async function GET(
-  req: Request,
+  _req: Request,
   context: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
 
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     }
 
     const { id } = await context.params;
 
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-      include: {
-        tenantProfile: true,
-      },
-    });
-
-    if (!user) {
-      return NextResponse.json({ error: "Usuário não encontrado" }, { status: 404 });
-    }
-
     const contract = await prisma.rentalContract.findUnique({
       where: { id },
       include: {
-        tenant: true,
         owner: {
           select: {
             id: true,
@@ -40,37 +28,45 @@ export async function GET(
             email: true,
           },
         },
+        tenantProfile: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                email: true,
+                role: true,
+              },
+            },
+            owner: {
+              select: {
+                id: true,
+                email: true,
+                role: true,
+              },
+            },
+          },
+        },
       },
     });
 
     if (!contract) {
-      return NextResponse.json({ error: "Contrato não encontrado" }, { status: 404 });
-    }
-
-    // ✅ regra de permissão
-    const isOwnerAllowed = user.role === "OWNER" && contract.ownerId === user.id;
-
-    const isTenantAllowed =
-      user.role === "TENANT" &&
-      user.tenantProfile &&
-      contract.tenantId === user.tenantProfile.id;
-
-    if (!isOwnerAllowed && !isTenantAllowed) {
       return NextResponse.json(
-        { error: "Sem permissão para acessar este contrato" },
-        { status: 403 }
+        { error: "Contrato não encontrado" },
+        { status: 404 }
       );
     }
 
-    return NextResponse.json({
-      contract,
-    });
-  } catch (err: any) {
-    console.error("❌ GET contract error:", err?.message || err);
+    const userId = session.user.id;
+    const isOwner = contract.ownerId === userId;
+    const isTenant = contract.tenantProfile.userId === userId;
 
-    return NextResponse.json(
-      { error: "Erro interno ao buscar contrato" },
-      { status: 500 }
-    );
+    if (!isOwner && !isTenant) {
+      return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
+    }
+
+    return NextResponse.json({ contract });
+  } catch (err) {
+    console.error(err);
+    return NextResponse.json({ error: "Erro interno" }, { status: 500 });
   }
 }
