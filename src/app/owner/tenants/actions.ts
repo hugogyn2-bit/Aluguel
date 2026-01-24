@@ -1,94 +1,136 @@
 "use server";
 
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
-import { z } from "zod";
-import { getToken } from "next-auth/jwt";
-import { headers } from "next/headers";
 
-const createTenantSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(4, "Senha muito curta."),
-  fullName: z.string().min(3, "Nome muito curto."),
-  cpf: z.string().min(11).max(14),
-  rg: z.string().min(3),
-  address: z.string().min(5),
-  cep: z.string().min(8).max(9),
-});
+export async function createTenantAction(formData: FormData) {
+  try {
+    const session = await getServerSession(authOptions);
 
-function normalizeCpf(cpf: string) {
-  return cpf.replace(/\D/g, ""); // só números
-}
+    if (!session?.user?.email) {
+      return { ok: false, error: "Não autenticado" };
+    }
 
-function normalizeCep(cep: string) {
-  return cep.replace(/\D/g, ""); // só números
-}
+    const owner = await prisma.user.findUnique({
+      where: { email: session.user.email },
+    });
 
-export async function createTenantAction(fd: FormData) {
-  // pega token (owner) pela request headers
-  const h = await headers();
-  const token = await getToken({
-    req: { headers: Object.fromEntries(h.entries()) } as any,
-    secret: process.env.NEXTAUTH_SECRET,
-  });
+    if (!owner) {
+      return { ok: false, error: "Usuário dono não encontrado" };
+    }
 
-  if (!token) return { ok: false, error: "Não autenticado." };
-  if (token.role !== "OWNER") return { ok: false, error: "Apenas OWNER pode criar inquilino." };
+    if (owner.role !== "OWNER") {
+      return { ok: false, error: "Acesso negado" };
+    }
 
-  const raw = {
-    email: String(fd.get("email") ?? "").trim().toLowerCase(),
-    password: String(fd.get("password") ?? ""),
-    fullName: String(fd.get("fullName") ?? "").trim(),
-    cpf: normalizeCpf(String(fd.get("cpf") ?? "")),
-    rg: String(fd.get("rg") ?? "").trim(),
-    address: String(fd.get("address") ?? "").trim(),
-    cep: normalizeCep(String(fd.get("cep") ?? "")),
-  };
+    // ✅ Pegando dados do formulário
+    const fullName = String(formData.get("fullName") || "").trim();
+    const cpf = String(formData.get("cpf") || "").trim();
+    const rg = String(formData.get("rg") || "").trim();
+    const email = String(formData.get("email") || "").trim();
+    const phone = String(formData.get("phone") || "").trim();
+    const address = String(formData.get("address") || "").trim();
+    const cep = String(formData.get("cep") || "").trim();
+    const city = String(formData.get("city") || "").trim();
+    const birthDateRaw = String(formData.get("birthDate") || "").trim();
+    const rentValueRaw = String(formData.get("rentValue") || "").trim();
 
-  const parsed = createTenantSchema.safeParse(raw);
-  if (!parsed.success) return { ok: false, error: "Dados inválidos.", issues: parsed.error.issues };
+    // ✅ Validações básicas
+    if (
+      !fullName ||
+      !cpf ||
+      !rg ||
+      !email ||
+      !phone ||
+      !address ||
+      !cep ||
+      !city ||
+      !birthDateRaw ||
+      !rentValueRaw
+    ) {
+      return { ok: false, error: "Preencha todos os campos obrigatórios" };
+    }
 
-  const { email, password, fullName, cpf, rg, address, cep } = parsed.data;
+    const birthDate = new Date(birthDateRaw);
+    if (isNaN(birthDate.getTime())) {
+      return { ok: false, error: "Data de nascimento inválida" };
+    }
 
-  const cpfDigits = cpf.replace(/\D/g, "");
-  if (cpfDigits.length !== 11) return { ok: false, error: "CPF deve ter 11 números." };
-  const ownerId = String(token.id);
+    const rentValueNumber = Number(rentValueRaw);
+    if (isNaN(rentValueNumber) || rentValueNumber <= 0) {
+      return { ok: false, error: "Valor do aluguel inválido" };
+    }
 
-  // bloqueia se email já existe
-  const existsEmail = await prisma.user.findUnique({ where: { email } });
-  if (existsEmail) return { ok: false, error: "E-mail já cadastrado." };
+    const rentValueCents = Math.round(rentValueNumber * 100);
 
-  // bloqueia se cpf já existe
-  const existsCpf = await prisma.tenantProfile.findUnique({ where: { cpf } });
-  if (existsCpf) return { ok: false, error: "CPF já cadastrado." };
+    // ✅ Senha padrão (tenant vai trocar no primeiro login)
+    const defaultPassword = cpf.replace(/\D/g, "").slice(0, 6) || "123456";
+    const passwordHash = await bcrypt.hash(defaultPassword, 10);
 
-  const tempPassword = cpfDigits; // senha inicial = CPF
-  const passwordHash = await bcrypt.hash(tempPassword, 10);
+    // ✅ Transação: cria User TENANT + TenantProfile
+    const result = await prisma.$transaction(async (tx) => {
+      // ✅ Se já existir User com esse email, bloqueia
+      const existingUser = await tx.user.findUnique({
+        where: { email },
+      });
 
-  // cria tudo em transação
-  await prisma.$transaction(async (tx) => {
-    const tenantUser = await tx.user.create({
-      data: {
-        email,
-        passwordHash,
-        role: "TENANT",
+      if (existingUser) {
+        throw new Error("Já existe um usuário com esse e-mail");
+      }
+
+      // ✅ Se já existir TenantProfile com esse CPF, bloqueia
+      const existingCpf = await tx.tenantProfile.findUnique({
+        where: { cpf },
+      });
+
+      if (existingCpf) {
+        throw new Error("Já existe um inquilino com esse CPF");
+      }
+
+      const tenantUser = await tx.user.create({
+        data: {
+          email,
+          name: fullName,
+          passwordHash,
+          role: "TENANT",
+          cpf,
+          birthDate,
           mustChangePassword: true,
-        name: fullName,
-      },
+        },
+      });
+
+      const tenantProfile = await tx.tenantProfile.create({
+        data: {
+          userId: tenantUser.id,
+          ownerId: owner.id,
+
+          fullName,
+          cpf,
+          rg,
+          email,
+          phone,
+
+          address,
+          cep,
+          city,
+
+          birthDate,
+          rentValueCents,
+        },
+      });
+
+      return { tenantUser, tenantProfile };
     });
 
-    await tx.tenantProfile.create({
-      data: {
-        userId: tenantUser.id,
-        ownerId,
-        fullName,
-        cpf: cpfDigits,
-        rg,
-        address,
-        cep,
-      },
-    });
-  });
-
-  return { ok: true };
+    return {
+      ok: true,
+      message: "Inquilino criado com sucesso",
+      tenantId: result.tenantProfile.id,
+    };
+  } catch (err: any) {
+    console.error("Erro ao criar inquilino:", err);
+    return { ok: false, error: err?.message || "Erro interno" };
+  }
 }

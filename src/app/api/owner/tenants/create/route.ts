@@ -11,31 +11,14 @@ function onlyNumbers(value: string) {
   return value.replace(/\D/g, "");
 }
 
-function parseBirthDateBR(birthDate: string) {
-  // "dd/mm/aaaa" -> Date
-  const [dd, mm, yyyy] = birthDate.split("/");
-  const d = Number(dd);
-  const m = Number(mm);
-  const y = Number(yyyy);
+function parseBirthDateISO(birthDate: string) {
+  // "yyyy-mm-dd" -> Date
+  // exemplo: "2026-01-24"
+  const date = new Date(birthDate);
 
-  if (!d || !m || !y) return null;
-
-  const date = new Date(Date.UTC(y, m - 1, d));
   if (isNaN(date.getTime())) return null;
 
   return date;
-}
-
-function rentToCentsBR(value: string) {
-  // aceita "29,90" ou "29.90" ou "1.234,56"
-  const cleaned = value
-    .replace(/\./g, "")
-    .replace(",", ".")
-    .trim();
-
-  const n = Number(cleaned);
-  if (isNaN(n)) return null;
-  return Math.round(n * 100);
 }
 
 function generateContractText(params: {
@@ -116,8 +99,8 @@ export async function POST(req: Request) {
       cep,
       city,
       phone,
-      birthDate, // dd/mm/aaaa
-      rentValue, // "29,90"
+      birthDate, // ✅ yyyy-mm-dd
+      rentValueCents, // ✅ number (centavos)
     } = body;
 
     if (
@@ -130,7 +113,7 @@ export async function POST(req: Request) {
       !city ||
       !phone ||
       !birthDate ||
-      !rentValue
+      rentValueCents === undefined
     ) {
       return NextResponse.json(
         { error: "Preencha todos os campos do inquilino." },
@@ -150,16 +133,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "CEP inválido." }, { status: 400 });
     }
 
-    const parsedBirthDate = parseBirthDateBR(birthDate);
+    const parsedBirthDate = parseBirthDateISO(birthDate);
     if (!parsedBirthDate) {
       return NextResponse.json(
-        { error: "Data de nascimento inválida (use dd/mm/aaaa)." },
+        { error: "Data de nascimento inválida." },
         { status: 400 }
       );
     }
 
-    const rentValueCents = rentToCentsBR(String(rentValue));
-    if (!rentValueCents || rentValueCents <= 0) {
+    const rentCents = Number(rentValueCents);
+    if (!rentCents || rentCents <= 0) {
       return NextResponse.json(
         { error: "Valor do aluguel inválido." },
         { status: 400 }
@@ -172,8 +155,16 @@ export async function POST(req: Request) {
 
     const now = new Date();
 
-    // ✅ cria tudo em transação
     const result = await prisma.$transaction(async (tx) => {
+      // ✅ evita erro de email duplicado
+      const existingEmail = await tx.user.findUnique({
+        where: { email },
+      });
+
+      if (existingEmail) {
+        throw new Error("EMAIL_ALREADY_EXISTS");
+      }
+
       // 1) cria User TENANT
       const tenantUser = await tx.user.create({
         data: {
@@ -205,7 +196,7 @@ export async function POST(req: Request) {
 
           birthDate: parsedBirthDate,
 
-          rentValueCents,
+          rentValueCents: rentCents,
         },
       });
 
@@ -219,7 +210,7 @@ export async function POST(req: Request) {
         cep: cepClean,
         email,
         phone: phoneClean,
-        rentValueCents,
+        rentValueCents: rentCents,
         createdAt: now,
       });
 
@@ -233,7 +224,7 @@ export async function POST(req: Request) {
           signedCity: city,
           signedAtDate: now,
 
-          rentValueCents,
+          rentValueCents: rentCents,
         },
       });
 
@@ -249,6 +240,15 @@ export async function POST(req: Request) {
     });
   } catch (err: any) {
     console.error("❌ Erro ao criar tenant + contrato:", err?.message || err);
+
+    // ✅ mensagens melhores
+    if (err?.message === "EMAIL_ALREADY_EXISTS") {
+      return NextResponse.json(
+        { error: "Já existe um usuário com esse email." },
+        { status: 400 }
+      );
+    }
+
     return NextResponse.json(
       { error: "Erro interno ao cadastrar inquilino." },
       { status: 500 }

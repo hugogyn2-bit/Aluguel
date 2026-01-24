@@ -1,97 +1,63 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
-function maskCPF(v: string) {
-  return v
-    .replace(/\D/g, "")
-    .slice(0, 11)
-    .replace(/(\d{3})(\d)/, "$1.$2")
-    .replace(/(\d{3})(\d)/, "$1.$2")
-    .replace(/(\d{3})(\d{1,2})$/, "$1-$2");
-}
+export default function OwnerCreateTenantPage() {
+  const router = useRouter();
 
-function maskCEP(v: string) {
-  return v
-    .replace(/\D/g, "")
-    .slice(0, 8)
-    .replace(/(\d{5})(\d)/, "$1-$2");
-}
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-function maskBirth(v: string) {
-  return v
-    .replace(/\D/g, "")
-    .slice(0, 8)
-    .replace(/(\d{2})(\d)/, "$1/$2")
-    .replace(/(\d{2})(\d)/, "$1/$2");
-}
-
-function maskPhone(v: string) {
-  // (99) 99999-9999 ou (99) 9999-9999
-  const digits = v.replace(/\D/g, "").slice(0, 11);
-
-  if (digits.length <= 10) {
-    return digits
-      .replace(/^(\d{2})(\d)/, "($1) $2")
-      .replace(/(\d{4})(\d)/, "$1-$2");
-  }
-
-  return digits
-    .replace(/^(\d{2})(\d)/, "($1) $2")
-    .replace(/(\d{5})(\d)/, "$1-$2");
-}
-
-export default function CreateTenantPage() {
   const [fullName, setFullName] = useState("");
-  const [email, setEmail] = useState("");
-  const [address, setAddress] = useState("");
-  const [cep, setCep] = useState("");
   const [cpf, setCpf] = useState("");
   const [rg, setRg] = useState("");
-  const [birthDate, setBirthDate] = useState("");
-  const [phone, setPhone] = useState(""); // ✅ NOVO
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [address, setAddress] = useState("");
+  const [cep, setCep] = useState("");
+  const [city, setCity] = useState("");
+  const [birthDate, setBirthDate] = useState(""); // yyyy-mm-dd
+  const [rentValue, setRentValue] = useState(""); // em reais
 
-  const [msg, setMsg] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  async function handleCreateTenant() {
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
     setLoading(true);
-    setMsg(null);
+    setError(null);
 
     try {
+      const rentValueCents = Math.round(Number(rentValue.replace(",", ".")) * 100);
+
       const res = await fetch("/api/owner/tenants/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           fullName,
-          email,
-          address,
-          cep,
           cpf,
           rg,
-          phone, // ✅ NOVO
-          birthDate, // (se quiser salvar depois no prisma, dá pra usar)
+          email,
+          phone,
+          address,
+          cep,
+          city,
+          birthDate,
+          rentValueCents,
         }),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
-        setMsg(data?.error || "Erro ao cadastrar inquilino.");
+        setError(data?.error || "Erro ao criar inquilino.");
         return;
       }
 
-      setMsg(`✅ Criado! Senha padrão: ${data?.defaultPassword || "123456"}`);
-      setFullName("");
-      setEmail("");
-      setAddress("");
-      setCep("");
-      setCpf("");
-      setRg("");
-      setBirthDate("");
-      setPhone("");
-    } catch {
-      setMsg("Erro interno ao cadastrar.");
+      // ✅ volta pra lista
+      router.push("/owner/tenants");
+      router.refresh();
+    } catch (err) {
+      console.error(err);
+      setError("Erro interno ao enviar formulário.");
     } finally {
       setLoading(false);
     }
@@ -99,86 +65,170 @@ export default function CreateTenantPage() {
 
   return (
     <div className="min-h-screen bg-black text-white px-4 py-10">
-      <div className="mx-auto w-full max-w-2xl rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur-xl">
-        <h1 className="text-2xl font-extrabold">Cadastrar Inquilino</h1>
-        <p className="mt-2 text-white/70 text-sm">
-          O inquilino será criado com senha padrão <b>123456</b> e será obrigado a trocar no primeiro login.
-        </p>
+      <div className="mx-auto w-full max-w-3xl">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-extrabold">➕ Criar Inquilino</h1>
+            <p className="text-white/60 text-sm mt-1">
+              Preencha os dados do inquilino para criar a conta automaticamente.
+            </p>
+          </div>
 
-        <div className="mt-6 grid gap-3">
-          <input
-            className="w-full rounded-xl bg-white/10 border border-white/10 px-4 py-3 outline-none"
-            placeholder="Nome completo"
-            value={fullName}
-            onChange={(e) => setFullName(e.target.value)}
-          />
+          <a
+            href="/owner/tenants"
+            className="rounded-xl bg-white/10 border border-white/10 px-4 py-3 font-semibold hover:bg-white/15"
+          >
+            ⬅ Voltar
+          </a>
+        </div>
 
-          <input
-            className="w-full rounded-xl bg-white/10 border border-white/10 px-4 py-3 outline-none"
-            placeholder="E-mail"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
+        {error ? (
+          <div className="mt-6 rounded-2xl border border-red-500/30 bg-red-500/10 p-5 text-red-200">
+            {error}
+          </div>
+        ) : null}
 
-          <input
-            className="w-full rounded-xl bg-white/10 border border-white/10 px-4 py-3 outline-none"
-            placeholder="Telefone (Ex.: (11) 99999-9999)"
-            value={phone}
-            onChange={(e) => setPhone(maskPhone(e.target.value))}
-          />
-
-          <input
-            className="w-full rounded-xl bg-white/10 border border-white/10 px-4 py-3 outline-none"
-            placeholder="Endereço completo"
-            value={address}
-            onChange={(e) => setAddress(e.target.value)}
-          />
-
-          <input
-            className="w-full rounded-xl bg-white/10 border border-white/10 px-4 py-3 outline-none"
-            placeholder="CEP (Ex.: 00000-000)"
-            value={cep}
-            onChange={(e) => setCep(maskCEP(e.target.value))}
-          />
-
-          <div className="grid gap-3 md:grid-cols-2">
-            <input
-              className="w-full rounded-xl bg-white/10 border border-white/10 px-4 py-3 outline-none"
-              placeholder="CPF (Ex.: 000.000.000-00)"
-              value={cpf}
-              onChange={(e) => setCpf(maskCPF(e.target.value))}
+        <form
+          onSubmit={handleSubmit}
+          className="mt-8 rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur-xl"
+        >
+          <div className="grid gap-4 md:grid-cols-2">
+            <Input
+              label="Nome completo"
+              value={fullName}
+              onChange={setFullName}
+              placeholder="Ex: João da Silva"
+              required
             />
 
-            <input
-              className="w-full rounded-xl bg-white/10 border border-white/10 px-4 py-3 outline-none"
-              placeholder="RG"
+            <Input
+              label="CPF"
+              value={cpf}
+              onChange={setCpf}
+              placeholder="000.000.000-00"
+              required
+            />
+
+            <Input
+              label="RG"
               value={rg}
-              onChange={(e) => setRg(e.target.value)}
+              onChange={setRg}
+              placeholder="Ex: 1234567"
+              required
+            />
+
+            <Input
+              label="Email (login do inquilino)"
+              value={email}
+              onChange={setEmail}
+              placeholder="email@email.com"
+              type="email"
+              required
+            />
+
+            <Input
+              label="Telefone"
+              value={phone}
+              onChange={setPhone}
+              placeholder="(00) 90000-0000"
+              required
+            />
+
+            <Input
+              label="Cidade"
+              value={city}
+              onChange={setCity}
+              placeholder="Ex: Goiânia"
+              required
+            />
+
+            <Input
+              label="Endereço"
+              value={address}
+              onChange={setAddress}
+              placeholder="Rua, número, bairro..."
+              required
+            />
+
+            <Input
+              label="CEP"
+              value={cep}
+              onChange={setCep}
+              placeholder="00000-000"
+              required
+            />
+
+            <Input
+              label="Data de nascimento"
+              value={birthDate}
+              onChange={setBirthDate}
+              type="date"
+              required
+            />
+
+            <Input
+              label="Valor do aluguel (R$)"
+              value={rentValue}
+              onChange={setRentValue}
+              placeholder="Ex: 1200"
+              required
             />
           </div>
 
-          <input
-            className="w-full rounded-xl bg-white/10 border border-white/10 px-4 py-3 outline-none"
-            placeholder="Data de nascimento (Ex.: dd/mm/aaaa)"
-            value={birthDate}
-            onChange={(e) => setBirthDate(maskBirth(e.target.value))}
-          />
+          <div className="mt-6 flex flex-col md:flex-row gap-3">
+            <button
+              type="submit"
+              disabled={loading}
+              className="rounded-xl bg-gradient-to-r from-cyan-500 via-fuchsia-500 to-purple-600 px-4 py-3 font-semibold hover:opacity-95 disabled:opacity-60"
+            >
+              {loading ? "Criando..." : "✅ Criar inquilino"}
+            </button>
 
-          <button
-            onClick={handleCreateTenant}
-            disabled={loading}
-            className="mt-2 w-full rounded-xl bg-gradient-to-r from-cyan-500 via-fuchsia-500 to-purple-600 px-4 py-3 font-semibold hover:opacity-95 disabled:opacity-60"
-          >
-            {loading ? "Cadastrando..." : "✅ Criar Inquilino"}
-          </button>
+            <button
+              type="button"
+              onClick={() => router.push("/owner/tenants")}
+              className="rounded-xl bg-white/10 border border-white/10 px-4 py-3 font-semibold hover:bg-white/15"
+            >
+              Cancelar
+            </button>
+          </div>
 
-          {msg ? (
-            <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/80">
-              {msg}
-            </div>
-          ) : null}
-        </div>
+          <div className="mt-6 text-white/40 text-xs">
+            ✅ O inquilino será criado com senha padrão <b>123456</b> e será obrigado
+            a trocar no primeiro login.
+          </div>
+        </form>
       </div>
     </div>
+  );
+}
+
+function Input({
+  label,
+  value,
+  onChange,
+  placeholder,
+  type = "text",
+  required = false,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  type?: string;
+  required?: boolean;
+}) {
+  return (
+    <label className="block">
+      <div className="text-sm font-semibold mb-2">{label}</div>
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        type={type}
+        required={required}
+        className="w-full rounded-xl bg-black/40 border border-white/10 px-4 py-3 text-white placeholder:text-white/30 outline-none focus:border-white/30"
+      />
+    </label>
   );
 }
