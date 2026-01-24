@@ -2,146 +2,117 @@
 
 import { useEffect, useState } from "react";
 
-export default function OwnerPage() {
+export default function OwnerDashboardPage() {
   const [loading, setLoading] = useState(true);
-  const [allowed, setAllowed] = useState(false);
-  const [trialEndsAt, setTrialEndsAt] = useState<string | null>(null);
-  const [ownerPaid, setOwnerPaid] = useState(false);
+  const [tenantsCount, setTenantsCount] = useState(0);
+  const [trialActive, setTrialActive] = useState(true);
+  const [premium, setPremium] = useState(false);
 
-  async function refreshStatus() {
-    setLoading(true);
-
+  async function loadData() {
     try {
-      const res = await fetch("/api/pay/owner/verify", { cache: "no-store" });
+      const res = await fetch("/api/owner/tenants/list");
       const data = await res.json();
 
-      if (!res.ok) {
-        setAllowed(false);
-        setOwnerPaid(false);
-        setTrialEndsAt(null);
-        setLoading(false);
-        return;
+      if (res.ok) {
+        setTenantsCount((data.tenants || []).length);
       }
-
-      setAllowed(Boolean(data.allowed));
-      setOwnerPaid(Boolean(data.ownerPaid));
-      setTrialEndsAt(
-        data.trialEndsAt ? new Date(data.trialEndsAt).toLocaleString() : null
-      );
     } catch {
-      setAllowed(false);
-      setOwnerPaid(false);
-      setTrialEndsAt(null);
+      // ignore
     } finally {
       setLoading(false);
     }
   }
 
-  async function startTrial() {
-    try {
-      const res = await fetch("/api/owner/trial/start", { method: "POST" });
-      const data = await res.json();
-      alert(data.message || "Trial processado");
-      await refreshStatus();
-    } catch {
-      alert("Erro interno ao ativar trial.");
-    }
-  }
-
-  async function goPremium() {
-    try {
-      const res = await fetch("/api/pay/owner/start", { method: "POST" });
-      const data = await res.json();
-
-      if (data?.url) {
-        window.location.href = data.url;
-        return;
-      }
-
-      alert(data?.error || "Erro ao iniciar pagamento");
-    } catch {
-      alert("Erro interno ao iniciar premium.");
-    }
-  }
-
-  async function openPortal() {
-    try {
-      const res = await fetch("/api/pay/owner/portal", { method: "POST" });
-      const data = await res.json();
-
-      if (data?.url) {
-        window.location.href = data.url;
-        return;
-      }
-
-      alert(data?.error || "Erro ao abrir portal");
-    } catch {
-      alert("Erro interno ao abrir portal.");
-    }
-  }
-
   useEffect(() => {
-    refreshStatus();
+    loadData();
   }, []);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center text-white bg-black">
-        Carregando...
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen px-6 py-12 text-white bg-black">
-      <div className="mx-auto max-w-3xl rounded-2xl border border-white/10 bg-white/5 p-8 backdrop-blur-xl">
-        <h1 className="text-3xl font-extrabold mb-3">Área do Proprietário</h1>
+    <div className="min-h-screen bg-black text-white px-4 py-10">
+      <div className="mx-auto w-full max-w-6xl">
+        {/* TOP */}
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h1 className="text-xl font-extrabold">Owner Panel ⚡</h1>
+            <p className="text-white/60 text-sm mt-1">
+              Controle seus tenants, pagamentos e imóveis com estilo neon.
+            </p>
+          </div>
 
-        <p className="text-white/70 mb-6">
-          Status atual:{" "}
-          {allowed ? (
-            <span className="text-green-300 font-semibold">✅ Liberado</span>
-          ) : (
-            <span className="text-red-300 font-semibold">
-              ❌ Bloqueado (Paywall)
-            </span>
-          )}
-        </p>
-
-        {trialEndsAt && (
-          <p className="text-sm text-white/60 mb-6">
-            ⏳ Trial termina em: <span className="text-white">{trialEndsAt}</span>
-          </p>
-        )}
-
-        <div className="flex flex-col md:flex-row gap-3">
-          <button
-            onClick={startTrial}
-            className="rounded-xl px-4 py-3 bg-white/10 border border-white/10 hover:bg-white/15"
-          >
-            🚀 Ativar Trial (24h)
-          </button>
-
-          <button
-            onClick={goPremium}
-            className="rounded-xl px-4 py-3 bg-gradient-to-r from-cyan-500 via-fuchsia-500 to-purple-600 font-semibold hover:opacity-95"
-          >
-            💳 Virar Premium (R$29,90/mês)
-          </button>
-
-          {ownerPaid ? (
-            <button
-              onClick={openPortal}
-              className="rounded-xl px-4 py-3 bg-red-500/20 border border-red-500/30 hover:bg-red-500/25"
+          <div className="flex gap-3">
+            <a
+              href="/owner/tenants/create"
+              className="rounded-xl bg-white/10 border border-white/10 px-4 py-2 font-semibold hover:bg-white/15"
             >
-              ⚙️ Gerenciar / Cancelar assinatura
-            </button>
-          ) : null}
+              + Novo Tenant
+            </a>
+
+            <a
+              href="/owner/premium"
+              className="rounded-xl bg-gradient-to-r from-purple-600 via-fuchsia-500 to-pink-500 px-4 py-2 font-semibold hover:opacity-95"
+            >
+              Premium
+            </a>
+          </div>
         </div>
 
-        <div className="mt-8 text-sm text-white/60">
-          ✅ O Trial libera o sistema por 24 horas. <br />
-          ✅ Depois disso, só libera novamente com Premium.
+        {/* CARD */}
+        <div className="mt-10 rounded-3xl border border-white/10 bg-white/5 p-8 backdrop-blur-xl shadow-[0_0_80px_rgba(255,255,255,0.05)]">
+          <h2 className="text-4xl font-extrabold">📊 Dashboard do Proprietário</h2>
+          <p className="mt-2 text-white/70">{loading ? "Carregando..." : "Bem vindo, Hugo"}</p>
+
+          {/* STATS */}
+          <div className="mt-8 grid gap-4 md:grid-cols-3">
+            <div className="rounded-2xl border border-white/10 bg-black/40 p-6">
+              <div className="text-white/50 text-sm">Inquilinos cadastrados</div>
+              <div className="text-4xl font-extrabold mt-2">{tenantsCount}</div>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-black/40 p-6">
+              <div className="text-white/50 text-sm">Premium</div>
+              <div className="text-2xl font-extrabold mt-2">
+                {premium ? "✅ Sim" : "❌ Não"}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-black/40 p-6">
+              <div className="text-white/50 text-sm">Trial</div>
+              <div className="text-2xl font-extrabold mt-2">
+                {trialActive ? "✅ Ativo" : "❌ Expirado"}
+              </div>
+            </div>
+          </div>
+
+          {/* BOTÕES DO PRINT ✅ */}
+          <div className="mt-8 grid gap-4 md:grid-cols-4">
+            <a
+              href="/owner/tenants"
+              className="rounded-2xl bg-white/10 border border-white/10 px-5 py-4 font-bold hover:bg-white/15"
+            >
+              👥 Meus Inquilinos
+            </a>
+
+            <a
+              href="/owner/tenants/create"
+              className="rounded-2xl bg-gradient-to-r from-cyan-500 via-fuchsia-500 to-purple-600 px-5 py-4 font-bold hover:opacity-95"
+            >
+              ➕ Novo Inquilino
+            </a>
+
+            <a
+              href="/owner/settings"
+              className="rounded-2xl bg-white/10 border border-white/10 px-5 py-4 font-bold hover:bg-white/15"
+            >
+              ⚙️ Configurações
+            </a>
+
+            <a
+              href="/owner/premium"
+              className="rounded-2xl bg-white/10 border border-white/10 px-5 py-4 font-bold hover:bg-white/15"
+            >
+              💳 Premium
+            </a>
+          </div>
         </div>
       </div>
     </div>

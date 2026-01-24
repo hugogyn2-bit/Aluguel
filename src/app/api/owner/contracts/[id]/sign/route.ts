@@ -5,8 +5,8 @@ import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 
-export async function GET(
-  _req: Request,
+export async function POST(
+  req: Request,
   context: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -25,20 +25,15 @@ export async function GET(
       return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
     }
 
+    const body = await req.json();
+    const signatureDataUrl = body?.signatureDataUrl;
+
+    if (!signatureDataUrl || typeof signatureDataUrl !== "string") {
+      return NextResponse.json({ error: "Assinatura inválida" }, { status: 400 });
+    }
+
     const contract = await prisma.rentalContract.findUnique({
       where: { id },
-      include: {
-        tenantProfile: {
-          include: {
-            user: {
-              select: { id: true, name: true, email: true },
-            },
-            owner: {
-              select: { id: true, name: true, email: true },
-            },
-          },
-        },
-      },
     });
 
     if (!contract) {
@@ -49,9 +44,21 @@ export async function GET(
       return NextResponse.json({ error: "Esse contrato não é seu" }, { status: 403 });
     }
 
-    return NextResponse.json({ contract });
+    const updated = await prisma.rentalContract.update({
+      where: { id },
+      data: {
+        ownerSignatureDataUrl: signatureDataUrl,
+        ownerSignedAt: new Date(),
+        status: contract.tenantSignedAt ? "ACTIVE" : "PENDING_SIGNATURES",
+      },
+    });
+
+    return NextResponse.json({
+      message: "✅ Contrato assinado pelo proprietário!",
+      contract: updated,
+    });
   } catch (err) {
-    console.error("❌ Erro ao buscar contrato (owner):", err);
+    console.error("❌ Erro ao assinar contrato (owner):", err);
     return NextResponse.json({ error: "Erro interno" }, { status: 500 });
   }
 }

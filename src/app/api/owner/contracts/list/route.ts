@@ -5,14 +5,10 @@ import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 
-export async function GET(
-  _req: Request,
-  context: { params: Promise<{ id: string }> }
-) {
+export async function GET() {
   try {
-    const { id } = await context.params;
-
     const session = await getServerSession(authOptions);
+
     if (!session?.user?.email) {
       return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     }
@@ -25,33 +21,26 @@ export async function GET(
       return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
     }
 
-    const contract = await prisma.rentalContract.findUnique({
-      where: { id },
+    const contracts = await prisma.rentalContract.findMany({
+      where: { ownerId: owner.id },
       include: {
         tenantProfile: {
           include: {
             user: {
-              select: { id: true, name: true, email: true },
-            },
-            owner: {
-              select: { id: true, name: true, email: true },
+              select: {
+                id: true,
+                email: true,
+              },
             },
           },
         },
       },
+      orderBy: { createdAt: "desc" },
     });
 
-    if (!contract) {
-      return NextResponse.json({ error: "Contrato não encontrado" }, { status: 404 });
-    }
-
-    if (contract.ownerId !== owner.id) {
-      return NextResponse.json({ error: "Esse contrato não é seu" }, { status: 403 });
-    }
-
-    return NextResponse.json({ contract });
+    return NextResponse.json({ contracts });
   } catch (err) {
-    console.error("❌ Erro ao buscar contrato (owner):", err);
+    console.error("Erro ao listar contratos:", err);
     return NextResponse.json({ error: "Erro interno" }, { status: 500 });
   }
 }
