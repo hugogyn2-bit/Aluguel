@@ -22,7 +22,10 @@ export async function GET(_req: Request) {
     });
 
     if (!user) {
-      return NextResponse.json({ error: "Usuário não encontrado" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Usuário não encontrado" },
+        { status: 404 }
+      );
     }
 
     if (user.role !== "TENANT") {
@@ -36,9 +39,7 @@ export async function GET(_req: Request) {
       );
     }
 
-    // ✅ AQUI ESTAVA O ERRO:
-    // no Prisma schema NÃO EXISTE tenantId
-    // o campo correto é tenantProfileId
+    // ✅ Procura o contrato ativo do tenant
     const contract = await prisma.rentalContract.findFirst({
       where: {
         tenantProfileId: user.tenantProfile.id,
@@ -75,7 +76,7 @@ export async function GET(_req: Request) {
 
     // ✅ GERA PDF SIMPLES COM O TEXTO DO CONTRATO
     const pdfDoc = await PDFDocument.create();
-    const page = pdfDoc.addPage([595, 842]); // A4
+    let page = pdfDoc.addPage([595, 842]); // A4
 
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const fontSize = 12;
@@ -86,25 +87,14 @@ export async function GET(_req: Request) {
 
     const text = contract.contractText || "Contrato vazio.";
 
-    // quebra por linhas simples
     const lines = text.split("\n");
-
     let y = startY;
 
     for (const line of lines) {
       if (y < 60) {
-        // se passar do final da pagina
-        const newPage = pdfDoc.addPage([595, 842]);
+        // ✅ Nova página quando chega no final
+        page = pdfDoc.addPage([595, 842]);
         y = startY;
-
-        newPage.drawText(line, {
-          x: marginLeft,
-          y,
-          size: fontSize,
-          font,
-        });
-
-        continue;
       }
 
       page.drawText(line, {
@@ -117,9 +107,11 @@ export async function GET(_req: Request) {
       y -= lineHeight;
     }
 
+    // ✅ Corrige o erro do NextResponse (Uint8Array não é aceito direto)
     const pdfBytes = await pdfDoc.save();
+    const pdfBuffer = Buffer.from(pdfBytes);
 
-    return new NextResponse(pdfBytes, {
+    return new NextResponse(pdfBuffer, {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `inline; filename="contrato-${contract.id}.pdf"`,
