@@ -13,48 +13,45 @@ export async function GET(
     const session = await getServerSession(authOptions);
 
     if (!session?.user?.email) {
-      return new Response(
-        JSON.stringify({ error: "Não autenticado" }),
-        { status: 401 }
-      );
+      return new Response(JSON.stringify({ error: "Não autenticado" }), {
+        status: 401,
+      });
     }
 
     const user = await prisma.user.findUnique({
       where: { email: session.user.email },
       include: {
         tenantProfile: true,
-        ownerProfile: true,
       },
     });
 
     if (!user) {
-      return new Response(
-        JSON.stringify({ error: "Usuário não encontrado" }),
-        { status: 404 }
-      );
+      return new Response(JSON.stringify({ error: "Usuário não encontrado" }), {
+        status: 404,
+      });
     }
 
-    // 🔐 contrato deve pertencer ao tenant OU ao owner
     const contract = await prisma.rentalContract.findFirst({
       where: {
         id: params.id,
         OR: [
-          { tenantProfileId: user.tenantProfile?.id },
           { ownerId: user.id },
+          { tenantProfileId: user.tenantProfile?.id },
         ],
       },
     });
 
     if (!contract) {
-      return new Response(
-        JSON.stringify({ error: "Contrato não encontrado" }),
-        { status: 404 }
-      );
+      return new Response(JSON.stringify({ error: "Contrato não encontrado" }), {
+        status: 404,
+      });
     }
 
-    // 🧾 cria PDF
+    // ✅ GERA PDF
     const pdfDoc = await PDFDocument.create();
-    const page = pdfDoc.addPage([595, 842]); // A4
+
+    // ✅ TEM QUE SER "let" (não const)
+    let page = pdfDoc.addPage([595, 842]); // A4
 
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const fontSize = 12;
@@ -63,9 +60,10 @@ export async function GET(
     let y = 780;
     const lineHeight = 16;
 
+    // ✅ evita crash de encoding do pdf-lib (emoji, acentos estranhos etc)
     const safeText =
-      contract.contractText
-        ?.replace(/[^\x00-\x7F]/g, "") || "Contrato vazio.";
+      (contract.contractText || "Contrato vazio.")
+        .replace(/[^\x00-\x7F]/g, "");
 
     const lines = safeText.split("\n");
 
@@ -87,7 +85,7 @@ export async function GET(
 
     const pdfBytes = await pdfDoc.save();
 
-    // ✅ CONVERSÃO CRÍTICA
+    // ✅ CORRETO: NextResponse não aceita Uint8Array
     const buffer = Buffer.from(pdfBytes);
 
     return new Response(buffer, {
@@ -98,9 +96,8 @@ export async function GET(
     });
   } catch (err) {
     console.error("Erro ao gerar PDF:", err);
-    return new Response(
-      JSON.stringify({ error: "Erro interno no PDF" }),
-      { status: 500 }
-    );
+    return new Response(JSON.stringify({ error: "Erro interno no PDF" }), {
+      status: 500,
+    });
   }
 }
