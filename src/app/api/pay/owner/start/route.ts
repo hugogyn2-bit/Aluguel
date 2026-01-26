@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
 import Stripe from "stripe";
-
+import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 
-export async function GET() {
+export async function POST() {
   try {
     const session = await getServerSession(authOptions);
 
@@ -15,35 +14,21 @@ export async function GET() {
       return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     }
 
-    const owner = await prisma.user.findUnique({
+    const user = await prisma.user.findUnique({
       where: { email: session.user.email },
     });
 
-    if (!owner || owner.role !== "OWNER") {
+    if (!user || user.role !== "OWNER") {
       return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
     }
 
     const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
-    const stripePriceId = process.env.STRIPE_PRICE_ID;
+    const priceId = process.env.STRIPE_PRICE_ID;
     const appUrl = process.env.NEXT_PUBLIC_APP_URL;
 
-    if (!stripeSecretKey) {
+    if (!stripeSecretKey || !priceId || !appUrl) {
       return NextResponse.json(
-        { error: "STRIPE_SECRET_KEY não configurada" },
-        { status: 500 }
-      );
-    }
-
-    if (!stripePriceId) {
-      return NextResponse.json(
-        { error: "STRIPE_PRICE_ID não configurada" },
-        { status: 500 }
-      );
-    }
-
-    if (!appUrl) {
-      return NextResponse.json(
-        { error: "NEXT_PUBLIC_APP_URL não configurada" },
+        { error: "Stripe não configurado (env faltando)" },
         { status: 500 }
       );
     }
@@ -52,43 +37,35 @@ export async function GET() {
       apiVersion: "2024-06-20",
     });
 
-    // ✅ garante que existe customer no Stripe
-    let stripeCustomerId = owner.stripeCustomerId;
+    let customerId = user.stripeCustomerId;
 
-    if (!stripeCustomerId) {
+    if (!customerId) {
       const customer = await stripe.customers.create({
-        email: owner.email,
-        name: owner.name || undefined,
-        metadata: {
-          ownerId: owner.id,
-        },
+        email: user.email,
+        name: user.name || "Owner",
       });
 
-      stripeCustomerId = customer.id;
+      customerId = customer.id;
 
       await prisma.user.update({
-        where: { id: owner.id },
-        data: {
-          stripeCustomerId,
-        },
+        where: { id: user.id },
+        data: { stripeCustomerId: customerId },
       });
     }
 
-    // ✅ cria checkout session
-    const checkoutSession = await stripe.checkout.sessions.create({
+    const checkout = await stripe.checkout.sessions.create({
       mode: "subscription",
-      customer: stripeCustomerId,
-      line_items: [{ price: stripePriceId, quantity: 1 }],
-      success_url: `${appUrl}/owner?premium=success`,
-      cancel_url: `${appUrl}/owner/premium?premium=cancel`,
-      allow_promotion_codes: true,
+      customer: customerId,
+      line_items: [{ price: priceId, quantity: 1 }],
+      success_url: `${appUrl}/owner/premium?success=1`,
+      cancel_url: `${appUrl}/owner/premium?canceled=1`,
     });
 
-    return NextResponse.redirect(checkoutSession.url!);
+    return NextResponse.json({ url: checkout.url });
   } catch (err) {
     console.error("Erro Stripe start:", err);
     return NextResponse.json(
-      { error: "Erro interno no Stripe (start)" },
+      { error: "Erro interno no Stripe" },
       { status: 500 }
     );
   }

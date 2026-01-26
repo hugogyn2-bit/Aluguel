@@ -13,7 +13,6 @@ export async function POST(
     const { id } = await context.params;
 
     const session = await getServerSession(authOptions);
-
     if (!session?.user?.email) {
       return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     }
@@ -28,14 +27,20 @@ export async function POST(
     }
 
     if (!user.tenantProfile) {
-      return NextResponse.json({ error: "Perfil do inquilino não encontrado" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Perfil de inquilino não encontrado" },
+        { status: 404 }
+      );
     }
 
     const body = await req.json();
     const signatureDataUrl = body?.signatureDataUrl;
 
-    if (!signatureDataUrl || typeof signatureDataUrl !== "string") {
-      return NextResponse.json({ error: "Assinatura inválida" }, { status: 400 });
+    if (!signatureDataUrl) {
+      return NextResponse.json(
+        { error: "Assinatura não enviada" },
+        { status: 400 }
+      );
     }
 
     const contract = await prisma.rentalContract.findUnique({
@@ -46,9 +51,11 @@ export async function POST(
       return NextResponse.json({ error: "Contrato não encontrado" }, { status: 404 });
     }
 
-    // ✅ garante que o contrato é do tenant logado
     if (contract.tenantProfileId !== user.tenantProfile.id) {
-      return NextResponse.json({ error: "Esse contrato não é seu" }, { status: 403 });
+      return NextResponse.json(
+        { error: "Esse contrato não pertence ao seu usuário" },
+        { status: 403 }
+      );
     }
 
     const updated = await prisma.rentalContract.update({
@@ -62,11 +69,14 @@ export async function POST(
     });
 
     return NextResponse.json({
-      message: "✅ Assinatura do inquilino salva com sucesso!",
+      message: "✅ Inquilino assinou com sucesso!",
       contract: updated,
     });
   } catch (err) {
-    console.error("Erro tenant-sign:", err);
-    return NextResponse.json({ error: "Erro interno ao assinar" }, { status: 500 });
+    console.error("Erro ao assinar (tenant):", err);
+    return NextResponse.json(
+      { error: "Erro interno ao assinar" },
+      { status: 500 }
+    );
   }
 }

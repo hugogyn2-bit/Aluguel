@@ -1,50 +1,51 @@
 "use client";
 
 import { useEffect, useState } from "react";
-
-type ContractStatus = "DRAFT" | "PENDING_SIGNATURES" | "ACTIVE" | "CANCELLED";
+import Link from "next/link";
 
 type Contract = {
   id: string;
-  status: ContractStatus;
+  status: string;
   createdAt: string;
-
-  ownerSignedAt: string | null;
-  tenantSignedAt: string | null;
+  rentValueCents: number;
 
   tenantProfile: {
-    id: string;
     fullName: string;
-    cpf: string;
-    rg: string;
-    email: string;
-    phone: string;
     city: string;
-    address: string;
-    cep: string;
-    rentValueCents: number;
-    createdAt: string;
   };
 };
 
-function statusLabel(status: ContractStatus) {
-  if (status === "DRAFT") return "Rascunho";
-  if (status === "PENDING_SIGNATURES") return "Aguardando assinaturas";
-  if (status === "ACTIVE") return "Ativo";
-  if (status === "CANCELLED") return "Cancelado";
-  return status;
+function statusLabel(status: string) {
+  switch (status) {
+    case "DRAFT":
+      return "Rascunho";
+    case "PENDING_SIGNATURES":
+      return "Pendente assinaturas";
+    case "ACTIVE":
+      return "Ativo";
+    case "CANCELLED":
+      return "Cancelado";
+    default:
+      return status;
+  }
 }
 
-function moneyBR(cents: number) {
-  return (cents / 100).toLocaleString("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  });
+function statusColor(status: string) {
+  switch (status) {
+    case "ACTIVE":
+      return "text-green-400";
+    case "PENDING_SIGNATURES":
+      return "text-yellow-300";
+    case "CANCELLED":
+      return "text-red-400";
+    default:
+      return "text-white";
+  }
 }
 
 export default function OwnerContractsPage() {
-  const [loading, setLoading] = useState(true);
   const [contracts, setContracts] = useState<Contract[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   async function loadContracts() {
@@ -52,50 +53,21 @@ export default function OwnerContractsPage() {
     setError(null);
 
     try {
-      const res = await fetch("/api/owner/contracts/list", {
-        cache: "no-store",
-      });
-
+      const res = await fetch("/api/owner/contracts");
       const data = await res.json();
 
       if (!res.ok) {
-        setContracts([]);
         setError(data?.error || "Erro ao carregar contratos");
+        setContracts([]);
         return;
       }
 
       setContracts(data.contracts || []);
     } catch {
+      setError("Erro interno ao carregar contratos");
       setContracts([]);
-      setError("Erro interno ao carregar contratos.");
     } finally {
       setLoading(false);
-    }
-  }
-
-  async function ownerSign(contractId: string) {
-    try {
-      // ⚠️ assinatura simples (texto)
-      // se você já tem assinatura desenhada no front depois eu adapto
-      const signatureDataUrl = "ASSINADO_PELO_PROPRIETARIO";
-
-      const res = await fetch(`/api/owner/contracts/${contractId}/sign`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ signatureDataUrl }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        alert(data?.error || "Erro ao assinar contrato");
-        return;
-      }
-
-      alert("✅ Contrato assinado com sucesso!");
-      loadContracts();
-    } catch {
-      alert("Erro interno ao assinar.");
     }
   }
 
@@ -113,42 +85,35 @@ export default function OwnerContractsPage() {
 
   return (
     <div className="min-h-screen bg-black text-white px-4 py-10">
-      <div className="mx-auto w-full max-w-6xl">
+      <div className="mx-auto w-full max-w-5xl">
+        {/* HEADER */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-extrabold">📄 Contratos</h1>
+            <h1 className="text-2xl font-extrabold">📑 Contratos</h1>
             <p className="text-white/60 text-sm mt-1">
-              Aqui você vê todos os contratos gerados para seus inquilinos.
+              Lista de contratos de locação cadastrados.
             </p>
           </div>
 
-          <div className="flex gap-3">
-            <a
-              href="/owner/tenants/create"
-              className="rounded-xl bg-gradient-to-r from-cyan-500 via-fuchsia-500 to-purple-600 px-4 py-3 font-semibold hover:opacity-95"
-            >
-              ➕ Novo Inquilino
-            </a>
-
-            <button
-              onClick={loadContracts}
-              className="rounded-xl bg-white/10 border border-white/10 px-4 py-3 font-semibold hover:bg-white/15"
-            >
-              🔄 Atualizar
-            </button>
-          </div>
+          <Link
+            href="/owner"
+            className="rounded-xl bg-white/10 border border-white/10 px-4 py-3 font-semibold hover:bg-white/15"
+          >
+            ⬅️ Voltar ao painel
+          </Link>
         </div>
 
-        {error ? (
+        {error && (
           <div className="mt-6 rounded-2xl border border-red-500/30 bg-red-500/10 p-5 text-red-200">
             {error}
           </div>
-        ) : null}
+        )}
 
+        {/* LISTA */}
         <div className="mt-8 grid gap-4">
           {contracts.length === 0 ? (
             <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-white/70">
-              Nenhum contrato criado ainda.
+              Nenhum contrato encontrado.
             </div>
           ) : (
             contracts.map((c) => (
@@ -156,107 +121,63 @@ export default function OwnerContractsPage() {
                 key={c.id}
                 className="rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur-xl"
               >
-                <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                  {/* INFO */}
                   <div>
-                    <h2 className="text-xl font-bold">
+                    <h2 className="text-lg font-bold">
                       {c.tenantProfile.fullName}
                     </h2>
 
                     <p className="text-white/60 text-sm mt-1">
-                      Status:{" "}
-                      <span className="text-white font-semibold">
-                        {statusLabel(c.status)}
-                      </span>
-                    </p>
-
-                    <p className="text-white/60 text-sm mt-1">
-                      Aluguel:{" "}
-                      <span className="text-white font-semibold">
-                        {moneyBR(c.tenantProfile.rentValueCents)}
-                      </span>
-                    </p>
-
-                    <p className="text-white/60 text-sm mt-1">
-                      Email:{" "}
-                      <span className="text-white">{c.tenantProfile.email}</span>
-                    </p>
-
-                    <p className="text-white/60 text-sm mt-1">
-                      CPF: <span className="text-white">{c.tenantProfile.cpf}</span>{" "}
-                      • RG: <span className="text-white">{c.tenantProfile.rg}</span>
-                    </p>
-
-                    <p className="text-white/60 text-sm mt-1">
-                      Endereço:{" "}
+                      Cidade:{" "}
                       <span className="text-white">
-                        {c.tenantProfile.address} • {c.tenantProfile.city}
+                        {c.tenantProfile.city}
                       </span>
                     </p>
 
                     <p className="text-white/60 text-sm mt-1">
                       Criado em:{" "}
                       <span className="text-white">
-                        {new Date(c.createdAt).toLocaleString("pt-BR")}
+                        {new Date(c.createdAt).toLocaleDateString("pt-BR")}
                       </span>
+                    </p>
+
+                    <p className="text-white/60 text-sm mt-1">
+                      Valor:{" "}
+                      <span className="text-white">
+                        {(c.rentValueCents / 100).toLocaleString("pt-BR", {
+                          style: "currency",
+                          currency: "BRL",
+                        })}
+                      </span>
+                    </p>
+
+                    <p
+                      className={`text-sm mt-2 font-semibold ${statusColor(
+                        c.status
+                      )}`}
+                    >
+                      Status: {statusLabel(c.status)}
                     </p>
                   </div>
 
-                  <div className="flex flex-col gap-3 w-full md:w-[260px]">
-                    <div className="rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-white/70">
-                      <div>
-                        Ass. Proprietário:{" "}
-                        {c.ownerSignedAt ? (
-                          <span className="text-green-300 font-semibold">
-                            ✅ OK
-                          </span>
-                        ) : (
-                          <span className="text-yellow-300 font-semibold">
-                            ⏳ Pendente
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="mt-1">
-                        Ass. Inquilino:{" "}
-                        {c.tenantSignedAt ? (
-                          <span className="text-green-300 font-semibold">
-                            ✅ OK
-                          </span>
-                        ) : (
-                          <span className="text-yellow-300 font-semibold">
-                            ⏳ Pendente
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    <a
+                  {/* ACTIONS */}
+                  <div className="flex flex-wrap gap-3">
+                    <Link
                       href={`/owner/contracts/${c.id}`}
-                      className="rounded-xl bg-white/10 border border-white/10 px-4 py-3 font-semibold hover:bg-white/15 text-center"
+                      className="rounded-xl bg-white/10 border border-white/10 px-4 py-2 font-semibold hover:bg-white/15"
                     >
-                      👁️ Ver contrato
-                    </a>
-
-                    <button
-                      onClick={() => ownerSign(c.id)}
-                      className="rounded-xl bg-gradient-to-r from-cyan-500 via-fuchsia-500 to-purple-600 px-4 py-3 font-semibold hover:opacity-95"
-                    >
-                      ✍️ Assinar (Owner)
-                    </button>
+                      📄 Ver contrato
+                    </Link>
 
                     <a
-                      href={`/api/owner/contracts/${c.id}/pdf`}
+                      href={`/api/contracts/${c.id}/pdf`}
                       target="_blank"
-                      className="rounded-xl bg-white/10 border border-white/10 px-4 py-3 font-semibold hover:bg-white/15 text-center"
-                      rel="noreferrer"
+                      className="rounded-xl bg-gradient-to-r from-cyan-500 via-fuchsia-500 to-purple-600 px-4 py-2 font-semibold hover:opacity-95"
                     >
                       ⬇️ PDF
                     </a>
                   </div>
-                </div>
-
-                <div className="mt-4 text-xs text-white/40">
-                  ID do contrato: <span className="text-white/60">{c.id}</span>
                 </div>
               </div>
             ))
@@ -264,7 +185,7 @@ export default function OwnerContractsPage() {
         </div>
 
         <div className="mt-10 text-white/40 text-xs">
-          ✅ Se o botão PDF der erro, me manda o log (eu já arrumo o endpoint).
+          ✅ Dica: contratos ficam <b>Ativos</b> quando ambas as assinaturas são feitas.
         </div>
       </div>
     </div>

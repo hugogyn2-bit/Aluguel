@@ -13,7 +13,6 @@ export async function POST(
     const { id } = await context.params;
 
     const session = await getServerSession(authOptions);
-
     if (!session?.user?.email) {
       return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     }
@@ -29,8 +28,11 @@ export async function POST(
     const body = await req.json();
     const signatureDataUrl = body?.signatureDataUrl;
 
-    if (!signatureDataUrl || typeof signatureDataUrl !== "string") {
-      return NextResponse.json({ error: "Assinatura inválida" }, { status: 400 });
+    if (!signatureDataUrl) {
+      return NextResponse.json(
+        { error: "Assinatura não enviada" },
+        { status: 400 }
+      );
     }
 
     const contract = await prisma.rentalContract.findUnique({
@@ -42,7 +44,7 @@ export async function POST(
     }
 
     if (contract.ownerId !== owner.id) {
-      return NextResponse.json({ error: "Esse contrato não é seu" }, { status: 403 });
+      return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
     }
 
     const updated = await prisma.rentalContract.update({
@@ -56,11 +58,14 @@ export async function POST(
     });
 
     return NextResponse.json({
-      message: "✅ Assinatura do proprietário salva!",
+      message: "✅ Proprietário assinou com sucesso!",
       contract: updated,
     });
   } catch (err) {
-    console.error("Erro owner-sign:", err);
-    return NextResponse.json({ error: "Erro interno ao assinar" }, { status: 500 });
+    console.error("Erro ao assinar (owner):", err);
+    return NextResponse.json(
+      { error: "Erro interno ao assinar" },
+      { status: 500 }
+    );
   }
 }

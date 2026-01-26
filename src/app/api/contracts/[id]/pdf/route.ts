@@ -6,8 +6,13 @@ import { PDFDocument, StandardFonts } from "pdf-lib";
 
 export const runtime = "nodejs";
 
+function safeText(text: string) {
+  // remove emoji e símbolos que quebram WinAnsi
+  return text.replace(/[^\x00-\x7F]/g, "");
+}
+
 export async function GET(
-  req: Request,
+  _req: Request,
   context: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -20,6 +25,7 @@ export async function GET(
 
     const user = await prisma.user.findUnique({
       where: { email: session.user.email },
+      include: { tenantProfile: true },
     });
 
     if (!user) {
@@ -28,102 +34,67 @@ export async function GET(
 
     const contract = await prisma.rentalContract.findUnique({
       where: { id },
-      include: {
-        tenantProfile: {
-          include: {
-            user: true,
-            owner: true,
-          },
-        },
-      },
+      include: { tenantProfile: true },
     });
 
     if (!contract) {
       return NextResponse.json({ error: "Contrato não encontrado" }, { status: 404 });
     }
 
-    // ✅ PERMISSÃO:
-    const isOwnerAllowed =
-      user.role === "OWNER" && contract.ownerId === user.id;
-
+    const isOwnerAllowed = user.role === "OWNER" && contract.ownerId === user.id;
     const isTenantAllowed =
       user.role === "TENANT" &&
-      contract.tenantProfile.userId === user.id;
+      user.tenantProfile &&
+      contract.tenantProfileId === user.tenantProfile.id;
 
     if (!isOwnerAllowed && !isTenantAllowed) {
       return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
     }
 
-    // ✅ monta PDF
     const pdfDoc = await PDFDocument.create();
-    const page = pdfDoc.addPage([595.28, 841.89]); // A4
+    let page = pdfDoc.addPage([595, 842]);
+
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const fontSize = 12;
 
-    const fontSize = 11;
-    const margin = 50;
-    const maxWidth = 595.28 - margin * 2;
+    const marginLeft = 50;
+    const startY = 780;
+    const lineHeight = 16;
 
-    const text = contract.contractText || "Contrato não encontrado.";
+    const text = safeText(contract.contractText || "Contrato vazio.");
+    const lines = text.split("\n");
 
-    function wrapText(text: string, maxChars: number) {
-      const words = text.split(" ");
-      const lines: string[] = [];
-      let line = "";
+    let y = startY;
 
-      for (const word of words) {
-        if ((line + word).length > maxChars) {
-          lines.push(line.trim());
-          line = "";
-        }
-        line += word + " ";
-      }
-      if (line.trim()) lines.push(line.trim());
-      return lines;
-    }
-
-    const lines = wrapText(text, 95);
-
-    let y = 800;
     for (const line of lines) {
-      if (y < 80) break;
+      if (y < 60) {
+        page = pdfDoc.addPage([595, 842]);
+        y = startY;
+      }
+
       page.drawText(line, {
-        x: margin,
+        x: marginLeft,
         y,
         size: fontSize,
         font,
-        maxWidth,
       });
-      y -= 16;
+
+      y -= lineHeight;
     }
-
-    // ✅ info assinatura no rodapé
-    const ownerSigned = contract.ownerSignedAt ? "✅ Assinado" : "❌ Não assinado";
-    const tenantSigned = contract.tenantSignedAt ? "✅ Assinado" : "❌ Não assinado";
-
-    page.drawText(`Locador: ${ownerSigned}`, {
-      x: margin,
-      y: 60,
-      size: 10,
-      font,
-    });
-
-    page.drawText(`Locatário: ${tenantSigned}`, {
-      x: margin + 250,
-      y: 60,
-      size: 10,
-      font,
-    });
 
     const pdfBytes = await pdfDoc.save();
 
-    return new NextResponse(Buffer.from(pdfBytes), {
+    return new NextResponse(pdfBytes, {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="contrato-${id}.pdf"`,
+        "Content-Disposition": `inline; filename="contrato-${contract.id}.pdf"`,
       },
     });
-  } catch (err: any) {
-    console.error("❌ Erro ao gerar PDF:", err?.message || err);
-    return NextResponse.json({ error: "Erro interno no PDF" }, { status: 500 });
+  } catch (err) {
+    console.error("Erro ao gerar PDF:", err);
+    return NextResponse.json(
+      { error: "Erro interno no PDF" },
+      { status: 500 }
+    );
   }
 }

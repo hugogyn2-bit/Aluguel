@@ -18,23 +18,19 @@ export async function GET() {
       include: { tenantProfile: true },
     });
 
-    if (!user) {
-      return NextResponse.json({ error: "Usuário não encontrado" }, { status: 404 });
-    }
-
-    if (user.role !== "TENANT") {
-      return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
+    if (!user || user.role !== "TENANT") {
+      return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
     }
 
     if (!user.tenantProfile) {
-      return NextResponse.json({ error: "Perfil de inquilino não encontrado" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Perfil de inquilino não encontrado" },
+        { status: 404 }
+      );
     }
 
     const contract = await prisma.rentalContract.findFirst({
-      where: {
-        tenantProfileId: user.tenantProfile.id,
-      },
-      orderBy: { createdAt: "desc" },
+      where: { tenantProfileId: user.tenantProfile.id },
       include: {
         tenantProfile: {
           include: {
@@ -50,14 +46,18 @@ export async function GET() {
     });
 
     if (!contract) {
-      return NextResponse.json({ error: "Nenhum contrato encontrado" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Contrato não encontrado" },
+        { status: 404 }
+      );
     }
 
-    return NextResponse.json({
-      contract,
-    });
+    return NextResponse.json({ contract });
   } catch (err) {
-    console.error("❌ Erro ao buscar contrato do tenant:", err);
-    return NextResponse.json({ error: "Erro interno" }, { status: 500 });
+    console.error("Erro ao pegar contrato do tenant:", err);
+    return NextResponse.json(
+      { error: "Erro interno ao buscar contrato" },
+      { status: 500 }
+    );
   }
 }
