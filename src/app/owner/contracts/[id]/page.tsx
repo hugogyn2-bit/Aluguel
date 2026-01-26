@@ -1,100 +1,168 @@
-import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import { PDFDocument, StandardFonts } from "pdf-lib";
+"use client";
 
-export const runtime = "nodejs";
+import { useEffect, useState } from "react";
 
-function safeText(text: string) {
-  // remove emoji e símbolos que quebram WinAnsi
-  return text.replace(/[^\x00-\x7F]/g, "");
-}
+type Contract = {
+  id: string;
+  status: string;
+  contractText: string;
+  ownerSignedAt: string | null;
+  tenantSignedAt: string | null;
+  tenantProfile?: {
+    fullName: string;
+    city: string;
+  };
+};
 
-export async function GET(
-  _req: Request,
-  context: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await context.params;
+export default function OwnerContractViewPage({
+  params,
+}: {
+  params: { id: string };
+}) {
+  const [loading, setLoading] = useState(true);
+  const [contract, setContract] = useState<Contract | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
-    }
+  const [signing, setSigning] = useState(false);
 
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-      include: { tenantProfile: true },
-    });
+  async function loadContract() {
+    setLoading(true);
+    setError(null);
 
-    if (!user) {
-      return NextResponse.json({ error: "Usuário não encontrado" }, { status: 404 });
-    }
+    try {
+      const res = await fetch(`/api/owner/contracts/${params.id}`);
+      const data = await res.json();
 
-    const contract = await prisma.rentalContract.findUnique({
-      where: { id },
-      include: { tenantProfile: true },
-    });
-
-    if (!contract) {
-      return NextResponse.json({ error: "Contrato não encontrado" }, { status: 404 });
-    }
-
-    const isOwnerAllowed = user.role === "OWNER" && contract.ownerId === user.id;
-    const isTenantAllowed =
-      user.role === "TENANT" &&
-      user.tenantProfile &&
-      contract.tenantProfileId === user.tenantProfile.id;
-
-    if (!isOwnerAllowed && !isTenantAllowed) {
-      return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
-    }
-
-    const pdfDoc = await PDFDocument.create();
-    let page = pdfDoc.addPage([595, 842]);
-
-    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-    const fontSize = 12;
-
-    const marginLeft = 50;
-    const startY = 780;
-    const lineHeight = 16;
-
-    const text = safeText(contract.contractText || "Contrato vazio.");
-    const lines = text.split("\n");
-
-    let y = startY;
-
-    for (const line of lines) {
-      if (y < 60) {
-        page = pdfDoc.addPage([595, 842]);
-        y = startY;
+      if (!res.ok) {
+        setError(data?.error || "Erro ao carregar contrato");
+        return;
       }
 
-      page.drawText(line, {
-        x: marginLeft,
-        y,
-        size: fontSize,
-        font,
+      setContract(data.contract);
+    } catch {
+      setError("Erro interno ao carregar contrato");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function signOwner() {
+    setSigning(true);
+    setError(null);
+
+    try {
+      // ✅ assinatura fake (só pra funcionar)
+      const signatureDataUrl = "data:image/png;base64,ASSINATURA_OWNER";
+
+      const res = await fetch(`/api/contracts/${params.id}/owner-sign`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ signatureDataUrl }),
       });
 
-      y -= lineHeight;
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data?.error || "Erro ao assinar");
+        return;
+      }
+
+      await loadContract();
+    } catch {
+      setError("Erro interno ao assinar");
+    } finally {
+      setSigning(false);
     }
+  }
 
-    const pdfBytes = await pdfDoc.save();
+  useEffect(() => {
+    loadContract();
+  }, []);
 
-    return new NextResponse(pdfBytes, {
-      headers: {
-        "Content-Type": "application/pdf",
-        "Content-Disposition": `inline; filename="contrato-${contract.id}.pdf"`,
-      },
-    });
-  } catch (err) {
-    console.error("Erro ao gerar PDF:", err);
-    return NextResponse.json(
-      { error: "Erro interno no PDF" },
-      { status: 500 }
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-black text-white flex items-center justify-center">
+        Carregando contrato...
+      </div>
     );
   }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-black text-white flex items-center justify-center px-4">
+        <div className="max-w-xl w-full rounded-2xl border border-red-500/30 bg-red-500/10 p-6 text-red-200">
+          {error}
+        </div>
+      </div>
+    );
+  }
+
+  if (!contract) {
+    return (
+      <div className="min-h-screen bg-black text-white flex items-center justify-center">
+        Contrato não encontrado.
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-black text-white px-4 py-10">
+      <div className="mx-auto w-full max-w-4xl">
+        <h1 className="text-2xl font-extrabold">📄 Ver Contrato (Owner)</h1>
+
+        <p className="text-white/60 text-sm mt-1">
+          Contrato ID: <span className="text-white">{contract.id}</span>
+        </p>
+
+        <div className="mt-6 flex flex-wrap gap-3">
+          <a
+            href={`/api/contracts/${contract.id}/pdf`}
+            target="_blank"
+            className="rounded-xl bg-gradient-to-r from-cyan-500 via-fuchsia-500 to-purple-600 px-4 py-2 font-semibold hover:opacity-95"
+          >
+            ⬇️ Baixar PDF
+          </a>
+
+          <button
+            disabled={signing}
+            onClick={signOwner}
+            className="rounded-xl bg-white/10 border border-white/10 px-4 py-2 font-semibold hover:bg-white/15 disabled:opacity-50"
+          >
+            ✍️ Assinar (Owner)
+          </button>
+
+          <button
+            onClick={loadContract}
+            className="rounded-xl bg-white/10 border border-white/10 px-4 py-2 font-semibold hover:bg-white/15"
+          >
+            🔄 Atualizar
+          </button>
+        </div>
+
+        <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-6 whitespace-pre-wrap text-white/80">
+          {contract.contractText}
+        </div>
+
+        <div className="mt-6 text-white/60 text-sm">
+          <p>
+            Status: <b className="text-white">{contract.status}</b>
+          </p>
+
+          <p className="mt-2">
+            Owner assinou?{" "}
+            <b className="text-white">
+              {contract.ownerSignedAt ? "SIM ✅" : "NÃO ❌"}
+            </b>
+          </p>
+
+          <p className="mt-1">
+            Tenant assinou?{" "}
+            <b className="text-white">
+              {contract.tenantSignedAt ? "SIM ✅" : "NÃO ❌"}
+            </b>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
 }
