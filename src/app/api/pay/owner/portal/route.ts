@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import Stripe from "stripe";
 import { getServerSession } from "next-auth";
+import Stripe from "stripe";
+
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -10,45 +11,57 @@ export async function GET() {
   try {
     const session = await getServerSession(authOptions);
 
-    if (!session?.user?.id) {
+    if (!session?.user?.email) {
       return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
+    const owner = await prisma.user.findUnique({
+      where: { email: session.user.email },
     });
 
-    if (!user || user.role !== "OWNER") {
-      return NextResponse.json(
-        { error: "Apenas OWNER pode acessar o portal" },
-        { status: 403 }
-      );
+    if (!owner || owner.role !== "OWNER") {
+      return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
     }
 
-    if (!process.env.STRIPE_SECRET_KEY) {
+    const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+
+    if (!stripeSecretKey) {
       return NextResponse.json(
         { error: "STRIPE_SECRET_KEY não configurada" },
         { status: 500 }
       );
     }
 
-    if (!user.stripeCustomerId) {
+    if (!appUrl) {
       return NextResponse.json(
-        { error: "Usuário não tem stripeCustomerId" },
+        { error: "NEXT_PUBLIC_APP_URL não configurada" },
+        { status: 500 }
+      );
+    }
+
+    if (!owner.stripeCustomerId) {
+      return NextResponse.json(
+        { error: "Você ainda não tem customer no Stripe" },
         { status: 400 }
       );
     }
 
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+    const stripe = new Stripe(stripeSecretKey, {
+      apiVersion: "2024-06-20",
+    });
 
     const portalSession = await stripe.billingPortal.sessions.create({
-      customer: user.stripeCustomerId,
-      return_url: `${process.env.NEXTAUTH_URL}/owner`,
+      customer: owner.stripeCustomerId,
+      return_url: `${appUrl}/owner`,
     });
 
     return NextResponse.redirect(portalSession.url);
   } catch (err) {
-    console.error(err);
-    return NextResponse.json({ error: "Erro interno" }, { status: 500 });
+    console.error("Erro Stripe portal:", err);
+    return NextResponse.json(
+      { error: "Erro interno no Stripe (portal)" },
+      { status: 500 }
+    );
   }
 }

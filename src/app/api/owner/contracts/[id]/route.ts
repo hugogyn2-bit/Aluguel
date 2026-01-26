@@ -28,16 +28,8 @@ export async function GET(
     const contract = await prisma.rentalContract.findUnique({
       where: { id },
       include: {
-        tenantProfile: {
-          include: {
-            user: {
-              select: { id: true, name: true, email: true },
-            },
-            owner: {
-              select: { id: true, name: true, email: true },
-            },
-          },
-        },
+        tenantProfile: true,
+        owner: { select: { id: true, name: true, email: true } },
       },
     });
 
@@ -45,13 +37,14 @@ export async function GET(
       return NextResponse.json({ error: "Contrato não encontrado" }, { status: 404 });
     }
 
+    // ✅ garante que o contrato é do dono logado
     if (contract.ownerId !== owner.id) {
-      return NextResponse.json({ error: "Esse contrato não é seu" }, { status: 403 });
+      return NextResponse.json({ error: "Sem permissão nesse contrato" }, { status: 403 });
     }
 
     return NextResponse.json({ contract });
   } catch (err) {
-    console.error("❌ Erro ao buscar contrato (owner):", err);
+    console.error("Erro GET owner contract:", err);
     return NextResponse.json({ error: "Erro interno" }, { status: 500 });
   }
 }

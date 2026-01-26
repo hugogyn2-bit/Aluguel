@@ -6,7 +6,7 @@ import { PDFDocument, StandardFonts } from "pdf-lib";
 
 export const runtime = "nodejs";
 
-export async function GET(_req: Request) {
+export async function GET() {
   try {
     const session = await getServerSession(authOptions);
 
@@ -16,16 +16,11 @@ export async function GET(_req: Request) {
 
     const user = await prisma.user.findUnique({
       where: { email: session.user.email },
-      include: {
-        tenantProfile: true,
-      },
+      include: { tenantProfile: true },
     });
 
     if (!user) {
-      return NextResponse.json(
-        { error: "Usuário não encontrado" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Usuário não encontrado" }, { status: 404 });
     }
 
     if (user.role !== "TENANT") {
@@ -33,50 +28,22 @@ export async function GET(_req: Request) {
     }
 
     if (!user.tenantProfile) {
-      return NextResponse.json(
-        { error: "Perfil de inquilino não encontrado" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Perfil de inquilino não encontrado" }, { status: 404 });
     }
 
-    // ✅ Procura o contrato ativo do tenant
     const contract = await prisma.rentalContract.findFirst({
       where: {
         tenantProfileId: user.tenantProfile.id,
-        status: "ACTIVE",
       },
-      include: {
-        tenantProfile: {
-          include: {
-            owner: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-              },
-            },
-            user: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-              },
-            },
-          },
-        },
-      },
+      orderBy: { createdAt: "desc" },
     });
 
     if (!contract) {
-      return NextResponse.json(
-        { error: "Contrato ativo não encontrado" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Contrato não encontrado" }, { status: 404 });
     }
 
-    // ✅ GERA PDF SIMPLES COM O TEXTO DO CONTRATO
     const pdfDoc = await PDFDocument.create();
-    let page = pdfDoc.addPage([595, 842]); // A4
+    const page = pdfDoc.addPage([595, 842]); // A4
 
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const fontSize = 12;
@@ -86,16 +53,12 @@ export async function GET(_req: Request) {
     const lineHeight = 16;
 
     const text = contract.contractText || "Contrato vazio.";
-
     const lines = text.split("\n");
+
     let y = startY;
 
     for (const line of lines) {
-      if (y < 60) {
-        // ✅ Nova página quando chega no final
-        page = pdfDoc.addPage([595, 842]);
-        y = startY;
-      }
+      if (y < 60) break;
 
       page.drawText(line, {
         x: marginLeft,
@@ -107,21 +70,19 @@ export async function GET(_req: Request) {
       y -= lineHeight;
     }
 
-    // ✅ Corrige o erro do NextResponse (Uint8Array não é aceito direto)
     const pdfBytes = await pdfDoc.save();
-    const pdfBuffer = Buffer.from(pdfBytes);
 
-    return new NextResponse(pdfBuffer, {
+    // ✅ AQUI É O PONTO QUE CORRIGE O ERRO INTERNO:
+    const buffer = Buffer.from(pdfBytes);
+
+    return new NextResponse(buffer, {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `inline; filename="contrato-${contract.id}.pdf"`,
       },
     });
   } catch (err) {
-    console.error("Erro ao gerar PDF do inquilino:", err);
-    return NextResponse.json(
-      { error: "Erro interno ao gerar PDF" },
-      { status: 500 }
-    );
+    console.error("Erro PDF Tenant:", err);
+    return NextResponse.json({ error: "Erro interno no PDF" }, { status: 500 });
   }
 }

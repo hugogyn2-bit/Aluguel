@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
+
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -23,24 +24,32 @@ export async function GET() {
 
     const contracts = await prisma.rentalContract.findMany({
       where: { ownerId: owner.id },
+      orderBy: { createdAt: "desc" },
       include: {
         tenantProfile: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                email: true,
-              },
-            },
+          select: {
+            id: true,
+            fullName: true,
+            cpf: true,
+            rg: true,
+            email: true,
+            phone: true,
+            city: true,
+            address: true,
+            cep: true,
+            rentValueCents: true,
+            createdAt: true,
           },
         },
       },
-      orderBy: { createdAt: "desc" },
     });
 
     return NextResponse.json({ contracts });
   } catch (err) {
-    console.error("Erro ao listar contratos:", err);
-    return NextResponse.json({ error: "Erro interno" }, { status: 500 });
+    console.error("Erro listando contratos (owner):", err);
+    return NextResponse.json(
+      { error: "Erro interno ao listar contratos" },
+      { status: 500 }
+    );
   }
 }

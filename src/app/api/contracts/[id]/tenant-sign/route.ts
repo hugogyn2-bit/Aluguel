@@ -10,43 +10,32 @@ export async function POST(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await context.params;
+
     const session = await getServerSession(authOptions);
 
-    if (!session?.user?.id) {
+    if (!session?.user?.email) {
       return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     }
 
-    const userId = session.user.id;
-    const { id } = await context.params;
-
-    const body = await req.json();
-    const signatureDataUrl = body?.signatureDataUrl as string | undefined;
-
-    if (!signatureDataUrl || typeof signatureDataUrl !== "string") {
-      return NextResponse.json(
-        { error: "Assinatura inválida" },
-        { status: 400 }
-      );
-    }
-
-    // ✅ pega o usuário e o tenantProfile dele
-    const tenantUser = await prisma.user.findUnique({
-      where: { id: userId },
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
       include: { tenantProfile: true },
     });
 
-    if (!tenantUser || tenantUser.role !== "TENANT") {
-      return NextResponse.json(
-        { error: "Apenas TENANT pode assinar aqui" },
-        { status: 403 }
-      );
+    if (!user || user.role !== "TENANT") {
+      return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
     }
 
-    if (!tenantUser.tenantProfile) {
-      return NextResponse.json(
-        { error: "TenantProfile não encontrado" },
-        { status: 404 }
-      );
+    if (!user.tenantProfile) {
+      return NextResponse.json({ error: "Perfil do inquilino não encontrado" }, { status: 404 });
+    }
+
+    const body = await req.json();
+    const signatureDataUrl = body?.signatureDataUrl;
+
+    if (!signatureDataUrl || typeof signatureDataUrl !== "string") {
+      return NextResponse.json({ error: "Assinatura inválida" }, { status: 400 });
     }
 
     const contract = await prisma.rentalContract.findUnique({
@@ -54,37 +43,30 @@ export async function POST(
     });
 
     if (!contract) {
-      return NextResponse.json(
-        { error: "Contrato não encontrado" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Contrato não encontrado" }, { status: 404 });
     }
 
-    // ✅ SEGURANÇA:
-    // esse contrato precisa ser do tenant logado
-    if (contract.tenantProfileId !== tenantUser.tenantProfile.id) {
-      return NextResponse.json(
-        { error: "Esse contrato não pertence ao seu usuário" },
-        { status: 403 }
-      );
+    // ✅ garante que o contrato é do tenant logado
+    if (contract.tenantProfileId !== user.tenantProfile.id) {
+      return NextResponse.json({ error: "Esse contrato não é seu" }, { status: 403 });
     }
 
-    // ✅ salva assinatura do tenant
-    await prisma.rentalContract.update({
+    const updated = await prisma.rentalContract.update({
       where: { id },
       data: {
         tenantSignatureDataUrl: signatureDataUrl,
         tenantSignedAt: new Date(),
         status:
-          contract.ownerSignedAt && contract.ownerSignatureDataUrl
-            ? "ACTIVE"
-            : "PENDING_SIGNATURES",
+          contract.ownerSignedAt ? "ACTIVE" : "PENDING_SIGNATURES",
       },
     });
 
-    return NextResponse.json({ message: "Contrato assinado pelo inquilino ✅" });
+    return NextResponse.json({
+      message: "✅ Assinatura do inquilino salva com sucesso!",
+      contract: updated,
+    });
   } catch (err) {
-    console.error(err);
-    return NextResponse.json({ error: "Erro interno" }, { status: 500 });
+    console.error("Erro tenant-sign:", err);
+    return NextResponse.json({ error: "Erro interno ao assinar" }, { status: 500 });
   }
 }
