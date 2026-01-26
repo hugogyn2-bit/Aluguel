@@ -7,9 +7,11 @@ export const runtime = "nodejs";
 
 export async function GET(
   _req: Request,
-  { params }: { params: { id: string } }
+  ctx: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await ctx.params;
+
     const session = await getServerSession(authOptions);
 
     if (!session?.user?.email) {
@@ -31,12 +33,14 @@ export async function GET(
       });
     }
 
+    // ✅ Owner pode ver contrato dele
+    // ✅ Tenant pode ver contrato dele
     const contract = await prisma.rentalContract.findFirst({
       where: {
-        id: params.id,
+        id,
         OR: [
           { ownerId: user.id },
-          { tenantProfileId: user.tenantProfile?.id },
+          { tenantProfileId: user.tenantProfile?.id || "" },
         ],
       },
     });
@@ -47,10 +51,8 @@ export async function GET(
       });
     }
 
-    // ✅ GERA PDF
+    // ✅ PDF
     const pdfDoc = await PDFDocument.create();
-
-    // ✅ TEM QUE SER "let" (não const)
     let page = pdfDoc.addPage([595, 842]); // A4
 
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -60,10 +62,9 @@ export async function GET(
     let y = 780;
     const lineHeight = 16;
 
-    // ✅ evita crash de encoding do pdf-lib (emoji, acentos estranhos etc)
-    const safeText =
-      (contract.contractText || "Contrato vazio.")
-        .replace(/[^\x00-\x7F]/g, "");
+    // ✅ evita erro do pdf-lib (emoji tipo ❌ etc)
+    const safeText = (contract.contractText || "Contrato vazio.")
+      .replace(/[^\x00-\x7F]/g, "");
 
     const lines = safeText.split("\n");
 
@@ -84,8 +85,6 @@ export async function GET(
     }
 
     const pdfBytes = await pdfDoc.save();
-
-    // ✅ CORRETO: NextResponse não aceita Uint8Array
     const buffer = Buffer.from(pdfBytes);
 
     return new Response(buffer, {

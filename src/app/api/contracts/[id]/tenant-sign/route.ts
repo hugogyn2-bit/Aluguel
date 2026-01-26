@@ -7,12 +7,13 @@ export const runtime = "nodejs";
 
 export async function POST(
   req: Request,
-  context: { params: Promise<{ id: string }> }
+  ctx: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await context.params;
+    const { id } = await ctx.params;
 
     const session = await getServerSession(authOptions);
+
     if (!session?.user?.email) {
       return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     }
@@ -27,18 +28,15 @@ export async function POST(
     }
 
     if (!user.tenantProfile) {
-      return NextResponse.json(
-        { error: "Perfil de inquilino não encontrado" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Perfil do inquilino não encontrado" }, { status: 404 });
     }
 
     const body = await req.json();
-    const signatureDataUrl = body?.signatureDataUrl;
+    const signatureDataUrl = String(body?.signatureDataUrl || "");
 
-    if (!signatureDataUrl) {
+    if (!signatureDataUrl || !signatureDataUrl.startsWith("data:image/")) {
       return NextResponse.json(
-        { error: "Assinatura não enviada" },
+        { error: "Assinatura inválida (envie signatureDataUrl)" },
         { status: 400 }
       );
     }
@@ -51,6 +49,7 @@ export async function POST(
       return NextResponse.json({ error: "Contrato não encontrado" }, { status: 404 });
     }
 
+    // ✅ segurança: contrato tem que ser do tenant logado
     if (contract.tenantProfileId !== user.tenantProfile.id) {
       return NextResponse.json(
         { error: "Esse contrato não pertence ao seu usuário" },
@@ -63,20 +62,16 @@ export async function POST(
       data: {
         tenantSignatureDataUrl: signatureDataUrl,
         tenantSignedAt: new Date(),
-        status:
-          contract.ownerSignedAt ? "ACTIVE" : "PENDING_SIGNATURES",
+        status: contract.ownerSignedAt ? "ACTIVE" : "PENDING_SIGNATURES",
       },
     });
 
     return NextResponse.json({
-      message: "✅ Inquilino assinou com sucesso!",
+      message: "✅ Assinatura do inquilino registrada!",
       contract: updated,
     });
   } catch (err) {
-    console.error("Erro ao assinar (tenant):", err);
-    return NextResponse.json(
-      { error: "Erro interno ao assinar" },
-      { status: 500 }
-    );
+    console.error("Erro tenant-sign:", err);
+    return NextResponse.json({ error: "Erro interno ao assinar" }, { status: 500 });
   }
 }
