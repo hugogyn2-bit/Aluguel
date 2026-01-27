@@ -1,116 +1,22 @@
-generator client {
-  provider = "prisma-client-js"
-}
-
-datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-}
-
-enum Role {
-  TENANT
-  OWNER
-}
-
-enum ContractStatus {
-  DRAFT
-  PENDING_SIGNATURES
-  ACTIVE
-  CANCELLED
-}
-
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  name         String?
-  passwordHash String
+  id                String   @id @default(cuid())
+  email             String   @unique
+  name              String?
+  role              Role
+  passwordHash      String
+  cpf               String?
+  birthDate         DateTime?
+  mustChangePassword Boolean  @default(false)
 
-  role Role @default(TENANT)
+  // 💎 PREMIUM
+  isPremium         Boolean  @default(false)
+  premiumUntil      DateTime?
 
-  cpf       String?   @unique
-  birthDate DateTime?
+  stripeCustomerId  String?
 
-  trialEndsAt    DateTime?
-  trialStartedAt DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
-  ownerPaid        Boolean   @default(false)
-  premiumStartedAt DateTime?
-
-  stripeCustomerId     String?  @unique
-  stripeSubscriptionId String?  @unique
-  stripePriceId        String?
-  stripeStatus         String?
-  currentPeriodEnd     DateTime?
-  cancelAtPeriodEnd    Boolean  @default(false)
-
-  mustChangePassword Boolean @default(false)
-
-  resetPasswordToken   String?
-  resetPasswordExpires DateTime?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  tenantProfile TenantProfile? @relation("TenantUser")
-  ownedTenants  TenantProfile[] @relation("OwnerTenants")
-  ownerContracts RentalContract[] @relation("OwnerContracts")
-}
-
-model TenantProfile {
-  id String @id @default(cuid())
-
-  userId String @unique
-  user   User   @relation("TenantUser", fields: [userId], references: [id], onDelete: Cascade)
-
-  ownerId String
-  owner   User @relation("OwnerTenants", fields: [ownerId], references: [id], onDelete: Cascade)
-
-  fullName  String
-  cpf       String   @unique
-  rg        String
-  email     String
-  phone     String
-
-  address String
-  cep     String
-  city    String
-
-  birthDate DateTime
-  rentValueCents Int
-
-  contract RentalContract?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([ownerId])
-}
-
-model RentalContract {
-  id String @id @default(cuid())
-
-  tenantProfileId String @unique
-  tenantProfile   TenantProfile @relation(fields: [tenantProfileId], references: [id], onDelete: Cascade)
-
-  ownerId String
-  owner   User @relation("OwnerContracts", fields: [ownerId], references: [id], onDelete: Cascade)
-
-  status ContractStatus @default(DRAFT)
-
-  contractText String
-  signedCity   String
-  signedAtDate DateTime
-
-  rentValueCents Int
-
-  ownerSignatureDataUrl String?
-  ownerSignedAt         DateTime?
-
-  tenantSignatureDataUrl String?
-  tenantSignedAt         DateTime?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([ownerId])
+  tenantProfile     TenantProfile?
+  ownerContracts    RentalContract[] @relation("OwnerContracts")
 }
