@@ -1,102 +1,56 @@
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { PDFDocument, StandardFonts } from "pdf-lib";
 
-export const runtime = "nodejs";
-
 export async function GET(
   _req: Request,
-  ctx: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   try {
-    const { id } = await ctx.params;
-
-    const session = await getServerSession(authOptions);
-
-    if (!session?.user?.email) {
-      return new Response(JSON.stringify({ error: "Não autenticado" }), {
-        status: 401,
-      });
-    }
-
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-      include: {
-        tenantProfile: true,
-      },
-    });
-
-    if (!user) {
-      return new Response(JSON.stringify({ error: "Usuário não encontrado" }), {
-        status: 404,
-      });
-    }
-
-    // ✅ Owner pode ver contrato dele
-    // ✅ Tenant pode ver contrato dele
-    const contract = await prisma.rentalContract.findFirst({
-      where: {
-        id,
-        OR: [
-          { ownerId: user.id },
-          { tenantProfileId: user.tenantProfile?.id || "" },
-        ],
-      },
+    const contract = await prisma.rentalContract.findUnique({
+      where: { id: params.id },
     });
 
     if (!contract) {
-      return new Response(JSON.stringify({ error: "Contrato não encontrado" }), {
-        status: 404,
-      });
+      return NextResponse.json({ error: "Contrato não encontrado" }, { status: 404 });
     }
 
-    // ✅ PDF
+    // remove emojis e caracteres inválidos
+    const safeText = contract.contractText.replace(/[^\x00-\x7F]/g, "");
+
     const pdfDoc = await PDFDocument.create();
-    let page = pdfDoc.addPage([595, 842]); // A4
-
+    let page = pdfDoc.addPage([595, 842]);
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-    const fontSize = 12;
-
-    const marginLeft = 50;
-    let y = 780;
-    const lineHeight = 16;
-
-    // ✅ evita erro do pdf-lib (emoji tipo ❌ etc)
-    const safeText = (contract.contractText || "Contrato vazio.")
-      .replace(/[^\x00-\x7F]/g, "");
 
     const lines = safeText.split("\n");
+    let y = 800;
 
     for (const line of lines) {
       if (y < 60) {
         page = pdfDoc.addPage([595, 842]);
-        y = 780;
+        y = 800;
       }
 
       page.drawText(line, {
-        x: marginLeft,
+        x: 40,
         y,
-        size: fontSize,
+        size: 11,
         font,
       });
 
-      y -= lineHeight;
+      y -= 16;
     }
 
     const pdfBytes = await pdfDoc.save();
-    const buffer = Buffer.from(pdfBytes);
 
-    return new Response(buffer, {
+    return new Response(Buffer.from(pdfBytes), {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `inline; filename="contrato-${contract.id}.pdf"`,
       },
     });
   } catch (err) {
-    console.error("Erro ao gerar PDF:", err);
-    return new Response(JSON.stringify({ error: "Erro interno no PDF" }), {
-      status: 500,
-    });
+    console.error("PDF error:", err);
+    return NextResponse.json({ error: "Erro interno no PDF" }, { status: 500 });
   }
 }

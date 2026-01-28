@@ -3,61 +3,32 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-export const runtime = "nodejs";
-
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
-
     if (!session?.user?.email) {
       return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-      include: { tenantProfile: true },
-    });
-
-    if (!user || user.role !== "TENANT") {
-      return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
-    }
-
-    if (!user.tenantProfile) {
-      return NextResponse.json(
-        { error: "Perfil de inquilino não encontrado" },
-        { status: 404 }
-      );
-    }
-
-    const contract = await prisma.rentalContract.findFirst({
-      where: { tenantProfileId: user.tenantProfile.id },
+    const tenant = await prisma.tenantProfile.findFirst({
+      where: {
+        user: { email: session.user.email },
+      },
       include: {
-        tenantProfile: {
-          include: {
-            owner: {
-              select: { id: true, name: true, email: true },
-            },
-            user: {
-              select: { id: true, name: true, email: true },
-            },
-          },
+        contracts: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
         },
       },
     });
 
-    if (!contract) {
-      return NextResponse.json(
-        { error: "Contrato não encontrado" },
-        { status: 404 }
-      );
+    if (!tenant || tenant.contracts.length === 0) {
+      return NextResponse.json({ error: "Contrato não encontrado" }, { status: 404 });
     }
 
-    return NextResponse.json({ contract });
+    return NextResponse.json({ contract: tenant.contracts[0] });
   } catch (err) {
-    console.error("Erro ao pegar contrato do tenant:", err);
-    return NextResponse.json(
-      { error: "Erro interno ao buscar contrato" },
-      { status: 500 }
-    );
+    console.error("Tenant contract:", err);
+    return NextResponse.json({ error: "Erro interno" }, { status: 500 });
   }
 }

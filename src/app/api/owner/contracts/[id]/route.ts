@@ -1,38 +1,64 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
+
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
+export const runtime = "nodejs";
+
 export async function GET(
-  _req: Request,
-  { params }: { params: { id: string } }
+  _request: NextRequest,
+  context: { params: Promise<{ id: string }> }
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.email) {
-    return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
-  }
+  try {
+    const { id } = await context.params;
 
-  const owner = await prisma.user.findUnique({
-    where: { email: session.user.email },
-  });
+    const session = await getServerSession(authOptions);
 
-  if (!owner || owner.role !== "OWNER") {
-    return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
-  }
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+    }
 
-  const contract = await prisma.rentalContract.findFirst({
-    where: {
-      id: params.id,
-      ownerId: owner.id,
-    },
-  });
+    const owner = await prisma.user.findUnique({
+      where: { email: session.user.email },
+    });
 
-  if (!contract) {
+    if (!owner || owner.role !== "OWNER") {
+      return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
+    }
+
+    const contract = await prisma.rentalContract.findFirst({
+      where: {
+        id,
+        ownerId: owner.id,
+      },
+      include: {
+        tenantProfile: {
+          include: {
+            user: {
+              select: {
+                name: true,
+                email: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!contract) {
+      return NextResponse.json(
+        { error: "Contrato não encontrado" },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({ contract });
+  } catch (err) {
+    console.error("❌ Erro ao buscar contrato (owner):", err);
     return NextResponse.json(
-      { error: "Contrato não encontrado" },
-      { status: 404 }
+      { error: "Erro interno" },
+      { status: 500 }
     );
   }
-
-  return NextResponse.json({ contract });
 }
