@@ -1,22 +1,92 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  OWNER
+  TENANT
+}
+
+enum ContractStatus {
+  PENDING_SIGNATURES
+  ACTIVE
+  CANCELLED
+}
+
 model User {
-  id                String   @id @default(cuid())
-  email             String   @unique
-  name              String?
-  role              Role
-  passwordHash      String
-  cpf               String?
-  birthDate         DateTime?
-  mustChangePassword Boolean  @default(false)
+  id                   String   @id @default(cuid())
+  email                String   @unique
+  name                 String?
+  passwordHash         String
+  role                 UserRole
+  cpf                  String?
+  birthDate            DateTime?
+  mustChangePassword   Boolean  @default(false)
 
-  // 💎 PREMIUM
-  isPremium         Boolean  @default(false)
-  premiumUntil      DateTime?
+  // premium / trial
+  premiumActive        Boolean  @default(false)
+  trialEndsAt          DateTime?
 
-  stripeCustomerId  String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  tenantProfile        TenantProfile?
+  ownedTenants         TenantProfile[] @relation("OwnerTenants")
+  ownedContracts       RentalContract[] @relation("OwnerContracts")
+}
+
+model TenantProfile {
+  id             String   @id @default(cuid())
+
+  userId         String   @unique
+  ownerId        String
+
+  fullName       String
+  cpf            String
+  rg             String
+  email          String
+  phone          String
+
+  address        String
+  cep            String
+  city           String
+  birthDate      DateTime
+
+  rentValueCents Int
+
+  createdAt      DateTime @default(now())
+
+  user           User     @relation(fields: [userId], references: [id])
+  owner          User     @relation("OwnerTenants", fields: [ownerId], references: [id])
+
+  contracts      RentalContract[]
+}
+
+model RentalContract {
+  id                String          @id @default(cuid())
+
+  tenantProfileId   String
+  ownerId           String
+
+  status            ContractStatus  @default(PENDING_SIGNATURES)
+
+  contractText      String
+
+  rentValueCents    Int
+
+  signedCity        String?
+  signedAtDate      DateTime?
+
+  tenantSignedAt    DateTime?
+  ownerSignedAt     DateTime?
 
   createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
 
-  tenantProfile     TenantProfile?
-  ownerContracts    RentalContract[] @relation("OwnerContracts")
+  tenantProfile     TenantProfile @relation(fields: [tenantProfileId], references: [id])
+  owner             User          @relation("OwnerContracts", fields: [ownerId], references: [id])
 }
